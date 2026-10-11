@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>Wheelchair experiment — synchronized player</title>
+<title>A Hybrid Multi-Goal Path Planning Framework for Powered Wheelchairs</title>
 <style>
   :root {
-    --bg: #14161a;
-    --panel: #1d2026;
-    --line: #2b3038;
-    --text: #e8e6e1;
-    --muted: #9aa0a8;
-    --accent: #6b7cff;
-    --ok: #5fc98a;
-    --bad: #e08484;
+    --bg: #ffffff;
+    --panel: #f6f7f9;
+    --line: #dfe3e8;
+    --text: #1a1d21;
+    --muted: #5f6771;
+    --accent: #2f4bd0;
+    --ok: #1a8a46;
+    --bad: #c0392b;
     --side: 0px;
   }
 
@@ -24,15 +24,70 @@
     padding: 2.5rem 1.25rem 4rem;
     background: var(--bg);
     color: var(--text);
-    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
-    line-height: 1.5;
+    font-family: "Times New Roman", Times, Georgia, serif;
+    font-size: 18.5px;
+    line-height: 1.55;
   }
 
   .wrap { max-width: 1000px; margin: 0 auto; }
 
-  header { border-bottom: 1px solid var(--line); padding-bottom: 1.25rem; margin-bottom: 1.5rem; }
-  h1 { margin: 0 0 0.35rem; font-size: 1.4rem; font-weight: 500; }
-  header p { margin: 0; color: var(--muted); font-size: 0.9rem; max-width: 68ch; }
+  .logos {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 1rem;
+    padding: 0 6%;              /* pulled in from the edges */
+    margin-bottom: 1.6rem;
+  }
+  .logos img { height: 78px; width: auto; }
+  .logos img:last-child { height: 56px; }
+  @media (max-width: 560px) {
+    .logos { padding: 0 3%; }
+    .logos img { height: 50px; }
+    .logos img:last-child { height: 36px; }
+  }
+
+  header {
+    border-bottom: 1px solid var(--line);
+    padding-bottom: 1.4rem; margin-bottom: 1.5rem;
+    text-align: center;
+  }
+  .paper-title {
+    margin: 0 0 1rem;
+    font-size: 1.6rem; font-weight: 700; line-height: 1.35;
+    max-width: 54ch; margin-inline: auto;
+    text-wrap: balance;          /* evens out the line lengths */
+    text-align: center;
+  }
+  /* explicit breaks keep the three lines near-equal; on a narrow screen they
+     drop out and the text wraps naturally instead */
+  @media (max-width: 640px) {
+    .paper-title br { display: none; }
+  }
+  .authors { margin: 0 0 0.6rem; font-size: 1.05rem; color: var(--text); }
+  .affil {
+    margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--muted);
+    line-height: 1.6; max-width: 62ch; margin-inline: auto;
+  }
+  .affil a { color: #2f4bd0; text-decoration: none; }
+  .affil a:hover { text-decoration: underline; }
+  header sup { font-size: 0.7em; }
+
+  .abstract {
+    margin-bottom: 1.9rem;
+  }
+  .section-title {
+    margin: 0 0 0.9rem;
+    font-size: 1.25rem; font-weight: 700;
+    padding-bottom: 0.4rem;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .abstract h2 {
+    margin: 0 0 0.5rem; font-size: 1.1rem; font-weight: 700;
+  }
+  .abstract p {
+    margin: 0; font-size: 1.05rem; color: var(--text);
+    line-height: 1.6; text-align: justify;
+  }
 
   section { margin-bottom: 1.75rem; }
 
@@ -72,13 +127,35 @@
   .loading[hidden] { display: none; }
   .loading .ring {
     width: 44px; height: 44px;
-    border: 3px solid rgba(255,255,255,0.18);
+    border: 3px solid rgba(0,0,0,0.12);
     border-top-color: var(--accent);
     border-radius: 50%;
     animation: spin 0.9s linear infinite;
     box-shadow: 0 0 14px rgba(0,0,0,0.5);
   }
   @keyframes spin { to { transform: rotate(360deg); } }
+
+  .vlabel {
+    position: absolute;
+    top: 6px;
+    font-size: 0.88rem;
+    letter-spacing: 0.04em;
+    pointer-events: none;
+    z-index: 4;
+    white-space: nowrap;
+  }
+  .vlabel-main {
+    left: calc(var(--side) + 10px);
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  }
+  .vlabel-pip {
+    left: 6px; right: 0;
+    text-align: center;
+    color: #ffffff;
+    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
+  }
+  .stage.hide-pip .vlabel-pip { display: none; }
 
   .sidecol {
     position: absolute; top: 0; left: 0; height: 100%;
@@ -87,19 +164,30 @@
   }
   .pip {
     display: flex; flex: none; overflow: hidden; background: #000;
-    border-right: 1px solid rgba(255,255,255,0.35);
-    border-bottom: 1px solid rgba(255,255,255,0.35);
+    border-right: 1px solid rgba(0,0,0,0.28);
+    border-bottom: 1px solid rgba(0,0,0,0.28);
   }
   .half { position: relative; height: 100%; overflow: hidden; flex: none; }
-  .half + .half { border-left: 1px solid rgba(255,255,255,0.22); }
+  .half + .half { border-left: 1px solid rgba(0,0,0,0.2); }
   .half video { position: absolute; max-width: none; display: block; object-fit: fill; }
 
   .plotwrap {
     position: relative; flex: 1 1 auto; min-height: 0;
     background: #ffffff;
-    border-right: 1px solid rgba(255,255,255,0.35);
+    border-right: 1px solid rgba(0,0,0,0.28);
+    display: flex; flex-direction: column;
   }
-  .plotwrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+  .vlabel-plot {
+    flex: none;
+    padding: 4px 4px 2px;
+    text-align: center;
+    font-size: 0.78rem;
+    letter-spacing: 0.04em;
+    color: #3a3f46;
+    white-space: nowrap;
+  }
+  .canvaswrap { position: relative; flex: 1 1 auto; min-height: 0; }
+  .canvaswrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
   .plotwrap .cap {
     position: absolute; top: 4px; left: 8px;
     font-size: 0.66rem; color: #8a8a8a;
@@ -107,7 +195,7 @@
 
   /* ---------- transport ---------- */
   .transport {
-    margin-top: 0.85rem;
+    margin-top: 0.4rem;
     border: 1px solid var(--line);
     border-radius: 6px;
     background: var(--panel);
@@ -116,17 +204,67 @@
   }
   button {
     font: inherit; font-size: 0.85rem; color: var(--text);
-    background: #262a32; border: 1px solid var(--line);
+    background: #ffffff; border: 1px solid var(--line);
     border-radius: 4px; padding: 0.4rem 0.9rem; cursor: pointer;
   }
-  button:hover { border-color: #444c59; }
+  button:hover { border-color: #aeb6c0; background: #f0f2f5; }
   button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
   button.primary {
     background: var(--accent); border-color: var(--accent);
-    color: #0d1020; font-weight: 600; min-width: 6rem;
+    color: #ffffff; font-weight: 600; min-width: 6rem;
   }
   input[type=range] { flex: 1; min-width: 140px; accent-color: var(--accent); }
   .time { font-variant-numeric: tabular-nums; font-size: 0.82rem; color: var(--muted); min-width: 11ch; }
+
+  .legend {
+    margin-top: 0.85rem;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    background: var(--panel);
+    padding: 0.7rem 1rem;
+    display: flex; flex-wrap: wrap;
+    gap: 0.45rem 1.1rem;
+    font-size: 0.9rem; color: var(--muted);
+  }
+  .lg { display: inline-flex; align-items: center; gap: 0.4rem; }
+  .lg i { flex: none; display: inline-block; }
+
+  .sw-ell {
+    width: 15px; height: 9px; border-radius: 50%;
+    background: color-mix(in srgb, var(--c) 50%, transparent);
+    border: 1px solid rgba(0,0,0,0.45);
+  }
+  .sw-ped {
+    position: relative;
+    width: 15px; height: 9px; border-radius: 50%;
+    background: color-mix(in srgb, #9fe8ef 55%, transparent);
+    border: 1.5px dotted #b8bec6;
+  }
+  .sw-ped::after {
+    content: ''; position: absolute; inset: 0; margin: auto;
+    width: 5px; height: 5px; border-radius: 50%; background: #d92b2b;
+  }
+  .sw-line { width: 18px; height: 0; border-top: 2.5px solid var(--c); }
+  .sw-dash { width: 18px; height: 0; border-top: 2.5px dashed var(--c); }
+  .sw-rect { width: 12px; height: 10px; border: 1.5px solid #000000; }
+  .sw-buf  { width: 14px; height: 11px; border: 1.5px dashed #e8871e; }
+  .sw-dot  { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
+  .sw-star {
+    width: 11px; height: 11px; background: #b9a4d8;
+    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%,
+                       79% 91%, 50% 70%, 21% 91%, 32% 57%,
+                       2% 35%, 39% 35%);
+  }
+
+  .setup {
+    margin-top: 1rem;
+    font-size: 1.02rem;
+    line-height: 1.6;
+    color: var(--text);
+  }
+  .setup p { margin: 0 0 0.7rem; text-align: justify; }
+  .setup p:last-child { margin-bottom: 0; }
+  .setup b { font-weight: 700; }
 
   .runbar {
     margin-top: 0.85rem;
@@ -179,7 +317,7 @@
   .orow .note { font-size: 0.76rem; color: #6f767f; }
   select {
     font: inherit; font-size: 0.83rem;
-    background: #262a32; color: var(--text);
+    background: #ffffff; color: var(--text);
     border: 1px solid var(--line); border-radius: 4px;
     padding: 0.3rem 0.5rem; max-width: 100%;
   }
@@ -187,7 +325,7 @@
 
   input[type=number] {
     font: inherit; font-size: 0.8rem; width: 5.5rem;
-    background: #262a32; color: var(--text);
+    background: #ffffff; color: var(--text);
     border: 1px solid var(--line); border-radius: 4px; padding: 0.25rem 0.4rem;
   }
 
@@ -201,7 +339,7 @@
     font-size: 0.8rem; color: var(--muted); max-width: 72ch;
   }
   kbd {
-    background: #262a32; border: 1px solid var(--line); border-bottom-width: 2px;
+    background: #ffffff; border: 1px solid var(--line); border-bottom-width: 2px;
     border-radius: 3px; padding: 0 0.35rem; font-size: 0.75rem; font-family: inherit;
   }
 </style>
@@ -209,21 +347,74 @@
 <body>
 <div class="wrap">
 
+  <div class="logos">
+    <img src="NEU_logo.png" alt="Northeastern University — Institute for Experiential Robotics">
+    <img src="river_logo.png" alt="RIVeR Lab">
+  </div>
+
   <header>
-    <h1 id="pageTitle">Wheelchair experiment — synchronized player</h1>
-    <p id="pageSubtitle">Overhead view with the stitched forward cameras and the planned trajectory down the left, all driven from one playhead.</p>
+    <h1 class="paper-title">A Hybrid Multi-Goal Path Planning Framework for<br>
+      Powered Wheelchairs in Dynamic Environments:<br>
+      From Simulation to Real-World Validation</h1>
+
+    <p class="authors">
+      Damla Leblebicioğlu<sup>1,2</sup>*, Ege Özgül<sup>1,2</sup> and Taşkın Padır<sup>1,2</sup>
+    </p>
+
+    <p class="affil">
+      <sup>1</sup>Electrical and Computer Engineering, Northeastern University<br>
+      <sup>2</sup>Institute of Experiential Robotics, Northeastern University
+    </p>
+
+    <p class="affil">
+      *Corresponding author:
+      <a href="mailto:leblebicioglu.d@northeastern.edu">leblebicioglu.d@northeastern.edu</a><br>
+      Contributing authors:
+      <a href="mailto:ozgul.e@northeastern.edu">ozgul.e@northeastern.edu</a>,
+      <a href="mailto:t.padir@northeastern.edu">t.padir@northeastern.edu</a>
+    </p>
+
+    <span id="pageTitle" hidden></span><span id="pageSubtitle" hidden></span>
   </header>
+
+  <section class="abstract">
+    <h2>Abstract</h2>
+    <p>Autonomous powered wheelchairs (PWs) operating in human-centered environments
+    must combine efficient multi-destination path planning with continuous collision
+    avoidance strategies in the presence of static and dynamic obstacles. This paper
+    presents a hybrid framework integrating Traveling Salesman Problem (TSP)-based
+    global task ordering, Potential-Field (PF) guidance, and local Rapidly-Exploring
+    Random Tree (RRT) and A* planners. PF guidance transfers global path information
+    to the local planning layer and helps the robot remain aligned with the global
+    path during obstacle avoidance. The simulation model uses an elliptical wheelchair
+    representation to account for the platform dimensions during collision avoidance.
+    The local planning layer is enhanced through an extended-neighborhood,
+    direction-aware A* formulation or an RRT planner with weighted environment-aware
+    sampling and a two-step extension strategy. The TSP–PF–RRT and TSP–PF–A* methods
+    are evaluated in normal, crowded, and extra-crowded environments using both
+    point-based and elliptical robot models. The framework is implemented on a
+    physical PW and evaluated using motion-capture (MoCap) for ground-truth
+    measurements and onboard LiDAR and RGB-D sensing without external MoCap support.
+    A representative real-world accessibility scenario is additionally investigated in
+    simulation and hardware. Results show that incorporating the wheelchair geometry
+    changes the observed collision behavior, yielding comparable collision avoidance
+    performance between the two hybrid planners under the elliptical model.</p>
+  </section>
+
+  <h2 class="section-title">Hardware Experiment and Wheelchair Setup</h2>
 
   <section>
     <div class="stage" id="stage">
       <div class="mainwrap" id="mainwrap">
         <video class="main" id="v0" playsinline preload="metadata" muted></video>
       </div>
+      <span class="vlabel vlabel-main">Top view</span>
 
       <div class="loading" id="loading" hidden><div class="ring"></div></div>
 
       <div class="sidecol" id="sidecol">
         <div class="pip" id="pip">
+          <span class="vlabel vlabel-pip">Wheelchair FOV</span>
           <div class="half" id="half1">
             <video id="v1" playsinline preload="metadata" muted></video>
           </div>
@@ -232,7 +423,8 @@
           </div>
         </div>
         <div class="plotwrap" id="plotwrap">
-          <canvas id="plot"></canvas>
+          <span class="vlabel-plot">Path Animation</span>
+          <div class="canvaswrap"><canvas id="plot"></canvas></div>
         </div>
       </div>
     </div>
@@ -244,10 +436,34 @@
       <span class="time" id="buffer" style="min-width:0;color:var(--bad)"></span>
     </div>
 
+    <div class="legend">
+      <span class="lg"><i class="sw-ell" style="--c:#1b3a8f"></i>wheelchair</span>
+      <span class="lg"><i class="sw-ped"></i>pedestrians</span>
+      <span class="lg"><i class="sw-line" style="--c:#1b3a8f"></i>path travelled</span>
+      <span class="lg"><i class="sw-line" style="--c:#ffb3c6"></i>global path</span>
+      <span class="lg"><i class="sw-rect"></i>rectangle</span>
+      <span class="lg"><i class="sw-buf"></i>extended rectangle</span>
+      <span class="lg"><i class="sw-star"></i>waypoint</span>
+      <span class="lg"><i class="sw-dot" style="--c:#d92b2b"></i>start</span>
+      <span class="lg"><i class="sw-dot" style="--c:#1a9e4b"></i>goal</span>
+    </div>
+
     <div class="runbar">
-      <label for="projectSel">Run</label>
+      <label for="projectSel">Experiment</label>
       <select id="projectSel"></select>
-      <span class="status wait" id="summaryStatus">checking…</span>
+      <span class="status wait" id="summaryStatus" hidden></span>
+    </div>
+
+    <div class="setup">
+      <p><b>Perpendicular Walk</b>: Two pedestrians pace back and forth, one along the x axis and one along the y axis.</p>
+
+      <p><b>Random Walk</b>: Two pedestrians move randomly while two more actively try to block the wheelchair.</p>
+
+      <p><b>Global Path (PF only)</b>: No pedestrians and no local replanning, showing the baseline route.</p>
+
+      <p><b>MoCap Localization</b>: Experiments take place inside an OptiTrack motion-capture cage, where reflective markers give ground-truth pose for both the wheelchair and the pedestrians.</p>
+
+      <p><b>LiDAR Localization</b>: Experiments take place outside the cage. The wheelchair localizes from its onboard LiDAR, with LIO-SAM supplying odometry, and pedestrians are tracked by RGB-D cameras.</p>
     </div>
 
     <div hidden>
@@ -339,10 +555,6 @@
     </details>
     </div>
   </section>
-
-  <footer>
-    <p>The camera panel shows the two forward cameras side by side, pre-cropped to the displayed region. All three videos play silently. <kbd>Space</kbd> toggles play, <kbd>←</kbd> <kbd>→</kbd> step 5 seconds.</p>
-  </footer>
 
 </div>
 
@@ -443,7 +655,7 @@
     grid:         '#d8d8d8',   // 1 m grid, light grey
     axis:         '#bdbdbd',
     obstacleEdge: '#000000',   // hollow black rectangles
-    bufferEdge:   '#b8960b',   // slightly dark yellow outer outline
+    bufferEdge:   '#e8871e',   // orange outline around each obstacle
     waypoint:     '#4b1d8f',   // dark purple stars
     start:        '#d92b2b',   // red
     goal:         '#1a9e4b',   // green
@@ -451,6 +663,9 @@
     label:        '#555555',
     markerEdge:   'rgba(0,0,0,0.55)',
     chair:        '#1b3a8f',   // path and robot share one dark blue
+    humanFill:    '#9fe8ef',   // light cyan body
+    humanEdge:    '#b8bec6',   // light grey outline
+    humanCore:    '#d92b2b',   // red centre point
     axisFrame:    '#9a9a9a'
   };
   const GRID_M = 1;
@@ -1078,11 +1293,9 @@
       ctx.strokeStyle = MAP.route;
       ctx.lineWidth = Math.max(1.2, px(2.2));
       ctx.lineJoin = 'round';
-      ctx.setLineDash([px(5), px(4)]);
       ctx.beginPath();
       path.forEach(([x, y], n) => n ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)));
       ctx.stroke();
-      ctx.setLineDash([]);
     }
 
     // waypoints
@@ -1114,7 +1327,7 @@
   /* Markers are ellipses whose long axis lies along the direction of travel.
      Sizes are in metres, so they scale with the plot. World angles run
      counter-clockwise with y up; canvas rotation is the other way round. */
-  function drawMarker(ctx, sx, sy, k, lenM, widM, angle, fill, stroke, alpha) {
+  function drawMarker(ctx, sx, sy, k, lenM, widM, angle, fill, stroke, alpha, dotted) {
     ctx.save();
     ctx.translate(sx, sy);
     ctx.rotate(-angle);
@@ -1126,8 +1339,10 @@
     ctx.globalAlpha = 1;
     if (stroke) {
       ctx.strokeStyle = stroke;
-      ctx.lineWidth = Math.max(0.6, px(1));
+      ctx.lineWidth = Math.max(0.8, px(1.2));
+      if (dotted) ctx.setLineDash([Math.max(1, px(1.6)), Math.max(1, px(1.6))]);
       ctx.stroke();
+      ctx.setLineDash([]);
     }
     ctx.restore();
   }
@@ -1176,28 +1391,31 @@
     }
     ctx.stroke();
 
+    const hs = P.humanSize || [0.55, 0.35];
+
     // runs with no participants log tracker slots that aren't people
     const showPeople = !(PROJECT && PROJECT.showPedestrians === false);
-    const hs = P.humanSize || [0.55, 0.35];
     if (showPeople) traj.humans.forEach((hm, n) => {
       if (hm.active === false) return;
       const p = hm.pts[i];
       if (!p || !isFinite(p.x) || !isFinite(p.y)) return;
       const a = headingAt(hm.pts, i, headingMemo, hm.name);
-      const col = P.humanColors[n % P.humanColors.length];
-      drawMarker(ctx, X(p.x), Y(p.y), k, hs[0], hs[1], a, col, MAP.markerEdge, 0.5);
+      drawMarker(ctx, X(p.x), Y(p.y), k, hs[0], hs[1], a,
+                 MAP.humanFill, MAP.humanEdge, 0.55, true);
 
       // exact position at the centre of the ellipse
-      ctx.fillStyle = col;
+      ctx.fillStyle = MAP.humanCore;
       ctx.beginPath();
-      ctx.arc(X(p.x), Y(p.y), Math.max(1, px(1.8)), 0, Math.PI * 2);
+      ctx.arc(X(p.x), Y(p.y), Math.max(1.6, px(2.8)), 0, Math.PI * 2);
       ctx.fill();
     });
 
     const c = traj.chair[i];
+    drawMarker(ctx, X(c.x), Y(c.y), k, hs[0], hs[1], c.yaw,
+               MAP.chair, MAP.markerEdge, 0.5);
     ctx.fillStyle = MAP.chair;
     ctx.beginPath();
-    ctx.arc(X(c.x), Y(c.y), Math.max(2, px(4)), 0, Math.PI * 2);
+    ctx.arc(X(c.x), Y(c.y), Math.max(1, px(1.8)), 0, Math.PI * 2);
     ctx.fill();
   }
 
@@ -1209,7 +1427,7 @@
     ctx.strokeRect(area.x + 0.5, area.y + 0.5, area.w - 1, area.h - 1);
 
     ctx.fillStyle = MAP.label;
-    ctx.font = Math.max(6, px(7.5)).toFixed(1) + 'px system-ui, sans-serif';
+    ctx.font = Math.max(7, px(9.5)).toFixed(1) + 'px "Times New Roman", Times, serif';
 
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
@@ -1226,6 +1444,18 @@
       if (py < area.y + 5 || py > area.y + area.h - 5) continue;
       ctx.fillText(String(Math.round(y)), area.x - px(4), py);
     }
+
+    // axis titles
+    ctx.font = Math.max(7.5, px(10)).toFixed(1) + 'px "Times New Roman", Times, serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'alphabetic';
+    ctx.fillText('x (m)', area.x + area.w / 2, area.y + area.h + px(25));
+
+    ctx.save();
+    ctx.translate(px(11), area.y + area.h / 2);
+    ctx.rotate(-Math.PI / 2);
+    ctx.fillText('y (m)', 0, 0);
+    ctx.restore();
 
     ctx.textAlign = 'start';
     ctx.textBaseline = 'alphabetic';
@@ -1247,7 +1477,7 @@
     SC = Math.min(1.4, Math.max(0.45, Math.min(w, h * 1.4) / REF_H));
 
     // room for the tick labels on the left and underneath
-    const M = { l: px(19), r: px(8), t: px(8), b: px(13) };
+    const M = { l: px(34), r: px(8), t: px(8), b: px(28) };
     const area = { x: M.l, y: M.t, w: w - M.l - M.r, h: h - M.t - M.b };
     if (area.w < 30 || area.h < 30) return;
 
@@ -1332,7 +1562,6 @@
   });
 
   function applyConfig() {
-    document.title = CFG.title;
     document.getElementById('pageTitle').textContent = CFG.title;
     document.getElementById('pageSubtitle').textContent = CFG.subtitle;
 

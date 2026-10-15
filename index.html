@@ -74,6 +74,20 @@
   .abstract {
     margin-bottom: 1.9rem;
   }
+  .fig { margin: 0 0 1.5rem; }
+  .fig img {
+    display: block; width: 100%; height: auto;
+    border: 1px solid var(--line); border-radius: 6px; background: #fff;
+  }
+  .fig figcaption {
+    margin-top: 0.45rem; font-size: 0.85rem; color: var(--muted); line-height: 1.5;
+  }
+  .figrow {
+    display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
+    gap: 1.2rem; margin-bottom: 0.4rem;
+  }
+  @media (max-width: 760px) { .figrow { grid-template-columns: 1fr; } }
+
   .section-title {
     margin: 0 0 0.9rem;
     font-size: 1.25rem; font-weight: 700;
@@ -401,7 +415,29 @@
     performance between the two hybrid planners under the elliptical model.</p>
   </section>
 
-  <h2 class="section-title">Hardware Experiment and Wheelchair Setup</h2>
+  <h2 class="section-title">Wheelchair Setup</h2>
+
+  <figure class="fig">
+    <img src="Wheelchair_Annotated.jpg" alt="The powered wheelchair from two angles, with the Livox Mid-360 LiDAR, OptiTrack markers and two Orbbec Gemini 336L RGB-D cameras labelled.">
+    <figcaption>The instrumented powered wheelchair. A Livox Mid-360 LiDAR supplies the scans
+    used for localization outside the cage, two Orbbec Gemini 336L RGB-D cameras face forward
+    for pedestrian tracking, and OptiTrack markers give ground-truth pose inside it.</figcaption>
+  </figure>
+
+  <div class="figrow">
+    <figure class="fig">
+      <img src="Scene_Annotated.jpg" alt="The motion-capture cage, showing ceiling cameras, the wheelchair, a pedestrian and the static box obstacles.">
+      <figcaption>The experiment area inside the OptiTrack cage: ceiling cameras, the
+      wheelchair, a pedestrian acting as a dynamic obstacle, and the static boxes.</figcaption>
+    </figure>
+    <figure class="fig">
+      <img src="OptiTrack_Markers_on_Head.jpg" alt="A pedestrian wearing a cap fitted with reflective OptiTrack markers.">
+      <figcaption>Pedestrians wear a cap carrying reflective markers, so the motion-capture
+      system tracks them to the same accuracy as the wheelchair.</figcaption>
+    </figure>
+  </div>
+
+  <h2 class="section-title">Hardware Experiments</h2>
 
   <section>
     <div class="stage" id="stage">

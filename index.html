@@ -356,6 +356,65 @@
     background: #ffffff; border: 1px solid var(--line); border-bottom-width: 2px;
     border-radius: 3px; padding: 0 0.35rem; font-size: 0.75rem; font-family: inherit;
   }
+
+  /* ---------- LiDAR point cloud player ---------- */
+  .pc-intro { margin: 0 0 0.85rem; font-size: 1.02rem; line-height: 1.6; text-align: justify; }
+  .pc-runbar { margin-top: 0; margin-bottom: 0.4rem; }
+  .pc-stage {
+    position: relative;
+    width: 100%;
+    aspect-ratio: 16 / 9;
+    background: #0b1020;
+    border: 1px solid var(--line);
+    border-radius: 6px;
+    overflow: hidden;
+  }
+  @media (max-width: 640px) { .pc-stage { aspect-ratio: 4 / 3; } }
+  .pc-canvaswrap { position: absolute; inset: 0; }
+  .pc-canvaswrap canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+  .pc-canvaswrap canvas:active { cursor: grabbing; }
+  .pc-label { left: 10px; color: #ffffff; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
+  .pc-hint {
+    position: absolute; right: 10px; bottom: 8px; z-index: 4;
+    font-size: 0.72rem; color: rgba(255,255,255,0.7); pointer-events: none;
+    text-shadow: 0 1px 2px rgba(0,0,0,0.9);
+  }
+  .pc-overlay {
+    position: absolute; inset: 0; z-index: 5;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 0.7rem; padding: 1.5rem; text-align: center;
+    color: #e8eefc; font-size: 0.95rem;
+    background: rgba(11, 16, 32, 0.82);
+  }
+  .pc-overlay[hidden] { display: none; }
+  .pc-bar { width: min(260px, 70%); height: 4px; border-radius: 2px; background: rgba(255,255,255,0.18); overflow: hidden; }
+  .pc-bar[hidden] { display: none; }
+  .pc-bar > div { height: 100%; width: 0; background: #6f86ff; transition: width 0.2s; }
+  .pc-transport select { flex: none; }
+  .frow input[type=color] {
+    width: 3.2rem; height: 1.8rem; padding: 2px; cursor: pointer;
+    border: 1px solid var(--line); border-radius: 4px; background: #ffffff;
+  }
+  .frow input[type=range] { min-width: 0; }
+  .frow input[type=checkbox] { justify-self: start; width: 1rem; height: 1rem; accent-color: var(--accent); }
+  .frow[hidden] { display: none; }
+  .frow output { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 3.2rem; text-align: right; }
+  .frow .note { font-size: 0.76rem; color: #6f767f; }
+  input[type=number].invalid { border-color: var(--bad); }
+  .pc-group-note { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
+  .brow {
+    display: grid; grid-template-columns: 110px 6.5rem 6.5rem;
+    gap: 0.5rem 0.9rem; align-items: center;
+    font-size: 0.83rem; padding: 0.22rem 0;
+  }
+  .brow > label { color: var(--muted); }
+  .brow input[type=number] { width: 100%; }
+  .brow-head { padding-bottom: 0; font-size: 0.76rem; color: var(--muted); }
+  .frow button { justify-self: start; }
+  @media (max-width: 560px) {
+    .frow { grid-template-columns: 96px minmax(0,1fr) auto; }
+    .pc-hint { display: none; }
+  }
 </style>
 </head>
 <body>
@@ -592,6 +651,171 @@
     </div>
   </section>
 
+  <h2 class="section-title">LiDAR Point Cloud</h2>
+
+  <section id="pcSection">
+    <p class="pc-intro">The onboard Livox Mid-360 scans of the selected experiment, replayed in the
+    map frame with the wheelchair moving along its LIO-SAM odometry. Runs inside the motion-capture
+    cage have no LiDAR recording.</p>
+
+    <div class="runbar pc-runbar">
+      <label for="pcExp">Experiment</label>
+      <select id="pcExp" aria-label="Experiment for the point cloud"></select>
+      <span class="status wait" id="pcStatus" hidden></span>
+    </div>
+
+    <div class="pc-stage" id="pcStage">
+      <div class="pc-canvaswrap" id="pcCanvasWrap"></div>
+      <span class="vlabel pc-label">Point cloud</span>
+      <span class="pc-hint">Drag to rotate, right-drag to pan, click then scroll to zoom, double-click to reset</span>
+      <div class="pc-overlay" id="pcOverlay">
+        <span id="pcMsg">Scroll here to load the point cloud.</span>
+        <div class="pc-bar" id="pcBar" hidden><div id="pcBarFill"></div></div>
+      </div>
+    </div>
+
+    <div class="transport pc-transport">
+      <button class="primary" id="pcPlay" type="button">Play</button>
+      <input type="range" id="pcScrub" min="0" max="1000" value="0" step="1" aria-label="Point cloud playhead">
+      <span class="time" id="pcTime">0.0 s / 0.0 s</span>
+      <select id="pcSpeed" aria-label="Playback speed">
+        <option value="0.25">0.25×</option>
+        <option value="0.5">0.5×</option>
+        <option value="1" selected>1×</option>
+        <option value="2">2×</option>
+        <option value="4">4×</option>
+      </select>
+      <button id="pcReset" type="button">Reset view</button>
+    </div>
+
+    <details class="settings" id="pcSettings">
+      <summary>Visualization settings</summary>
+
+      <div class="group">
+        <h4>Points</h4>
+        <div class="frow">
+          <label for="pcColorMode">Color by</label>
+          <select id="pcColorMode">
+            <option value="height">Height</option>
+            <option value="intensity">Intensity</option>
+            <option value="time">Time</option>
+            <option value="solid">Single color</option>
+          </select>
+          <span></span>
+        </div>
+        <div class="frow" id="pcSolidRow">
+          <label for="pcSolid">Color</label>
+          <input type="color" id="pcSolid">
+          <span></span>
+        </div>
+        <div class="frow">
+          <label for="pcSize">Point size</label>
+          <input type="range" id="pcSize" min="0.2" max="6" step="0.1">
+          <output id="pcSizeOut" for="pcSize"></output>
+        </div>
+        <div class="frow">
+          <label for="pcShape">Point shape</label>
+          <select id="pcShape">
+            <option value="square">Square</option>
+            <option value="circle">Circle</option>
+            <option value="soft">Soft</option>
+          </select>
+          <span></span>
+        </div>
+      </div>
+
+      <div class="group">
+        <h4>Time window</h4>
+        <div class="frow">
+          <label for="pcWindow">Seconds shown</label>
+          <input type="number" id="pcWindow" min="0" max="120" step="0.5">
+          <span class="note">0 shows only the current scan</span>
+        </div>
+        <div class="frow">
+          <label for="pcFade">Fade older scans</label>
+          <input type="checkbox" id="pcFade">
+          <span></span>
+        </div>
+        <div class="frow">
+          <label for="pcMap">Accumulated map</label>
+          <input type="checkbox" id="pcMap">
+          <span></span>
+        </div>
+      </div>
+
+      <div class="group">
+        <h4>Path and wheelchair</h4>
+        <div class="frow">
+          <label for="pcPath">Show path</label>
+          <input type="checkbox" id="pcPath">
+          <span></span>
+        </div>
+        <div class="frow">
+          <label for="pcPathColor">Path color</label>
+          <input type="color" id="pcPathColor">
+          <span></span>
+        </div>
+        <div class="frow">
+          <label for="pcPathWidth">Path thickness</label>
+          <input type="range" id="pcPathWidth" min="0.01" max="0.5" step="0.01">
+          <output id="pcPathWidthOut" for="pcPathWidth"></output>
+        </div>
+        <div class="frow">
+          <label for="pcChair">Show wheelchair</label>
+          <input type="checkbox" id="pcChair">
+          <span></span>
+        </div>
+        <div class="frow">
+          <label for="pcChairColor">Wheelchair color</label>
+          <input type="color" id="pcChairColor">
+          <span></span>
+        </div>
+      </div>
+
+      <div class="group">
+        <h4>Static map exclusion box</h4>
+        <p class="pc-group-note">Points of the accumulated map inside this box are hidden. The played
+        scans are not affected. Coordinates are in meters, in the map frame (x forward, y left, z up
+        from the start pose), and are remembered for each experiment.</p>
+        <div class="frow">
+          <label for="pcBoxOn">Exclude points</label>
+          <input type="checkbox" id="pcBoxOn">
+          <span class="note" id="pcBoxNote"></span>
+        </div>
+        <div class="frow">
+          <label for="pcBoxShow">Show box outline</label>
+          <input type="checkbox" id="pcBoxShow">
+          <span></span>
+        </div>
+        <div class="brow brow-head"><span></span><span>Min</span><span>Max</span></div>
+        <div class="brow">
+          <label for="pcBox_xmin">X</label>
+          <input type="number" id="pcBox_xmin" step="0.1" aria-label="Box x min">
+          <input type="number" id="pcBox_xmax" step="0.1" aria-label="Box x max">
+        </div>
+        <div class="brow">
+          <label for="pcBox_ymin">Y</label>
+          <input type="number" id="pcBox_ymin" step="0.1" aria-label="Box y min">
+          <input type="number" id="pcBox_ymax" step="0.1" aria-label="Box y max">
+        </div>
+        <div class="brow">
+          <label for="pcBox_zmin">Z</label>
+          <input type="number" id="pcBox_zmin" step="0.1" aria-label="Box z min">
+          <input type="number" id="pcBox_zmax" step="0.1" aria-label="Box z max">
+        </div>
+        <div class="frow">
+          <span></span>
+          <button type="button" id="pcBoxReset">Reset box to default</button>
+          <span></span>
+        </div>
+      </div>
+
+      <div class="group">
+        <button type="button" id="pcDefaults">Restore default settings</button>
+      </div>
+    </details>
+  </section>
+
 </div>
 
 <script>
@@ -629,7 +853,9 @@
         overhead: 'overhead_web.mp4',
         camera1: 'cam1_detected.mp4',
         camera2: 'cam2_detected.mp4',
-        trajectory: 'trajectory.csv'
+        trajectory: 'trajectory.csv',
+        // the filtered LiDAR bag, used by the point cloud player at the bottom
+        lidarBag: 'lidar_bag/lidar_bag_0_filtered.db3'
       },
       offsets: { overhead: 0, camera1: 0, camera2: 0, path: 0 },
       timeScale: { camera1: 1, camera2: 1 },
@@ -1582,12 +1808,18 @@
 
     setStatus(projStat, 'ok', proj.folder ? trimSlash(proj.folder) + '/' : 'root');
     layout();
+
+    // Tell the point cloud player which run is selected and where its bag is.
+    const lidarDefault = (CFG.defaults.files && CFG.defaults.files.lidarBag) || DEFAULTS.defaults.files.lidarBag;
+    const lidarProj = (proj.files && 'lidarBag' in proj.files)
+      ? proj
+      : Object.assign({}, proj, { files: Object.assign({}, proj.files, { lidarBag: lidarDefault }) });
+    window.__experiment = { id: proj.id, name: proj.name || proj.id, sources: sourcesFor(lidarProj, 'lidarBag') };
+    window.dispatchEvent(new CustomEvent('experiment-change', { detail: window.__experiment }));
   }
 
   const rotSel = document.getElementById('rotSel');
   rotSel.addEventListener('change', () => {
-    ENV = (CFG.environments || {})[proj.environment] || null;
-
     rotation = Number(rotSel.value) || 0;
     layoutOverhead();
   });
@@ -1645,5 +1877,6 @@
   })();
 })();
 </script>
+<script src="pointcloud_player.js"></script>
 </body>
 </html>

@@ -45,23 +45,28 @@
   const previewEl = $('pcPreview');
 
   /* A still image of each experiment, shown while its bag downloads and decodes.
-     It lives next to the bag: <folder>/lidar_bag/preview.jpg. */
-  function previewUrlFor(exp) {
+     It lives next to the bag as preview.jpg, preview.png or preview.webp, tried in that order. */
+  const PREVIEW_NAMES = ['preview.jpg', 'preview.png', 'preview.webp'];
+  function previewUrlsFor(exp) {
     const u = exp && exp.sources && exp.sources[0];
-    return u ? u.replace(/[^/]*$/, 'preview.jpg') : null;
+    return u ? PREVIEW_NAMES.map((name) => u.replace(/[^/]*$/, name)) : [];
   }
   function showPreview(exp) {
     hidePreview();
-    const url = previewUrlFor(exp);
-    if (!url) return;
+    const urls = previewUrlsFor(exp);
+    let i = 0;
+    const tryNext = () => {
+      if (i >= urls.length || currentId !== exp.id) { hidePreview(); return; }
+      previewEl.src = urls[i++];
+    };
     previewEl.onload = () => {
       if (currentId === exp.id && !data) {
         previewEl.hidden = false;
         overlay.classList.add('on-preview');
       }
     };
-    previewEl.onerror = hidePreview;
-    previewEl.src = url;
+    previewEl.onerror = tryNext;
+    tryNext();
   }
   function hidePreview() {
     previewEl.onload = previewEl.onerror = null;

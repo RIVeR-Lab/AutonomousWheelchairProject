@@ -387,6 +387,16 @@
     background: rgba(11, 16, 32, 0.82);
   }
   .pc-overlay[hidden] { display: none; }
+  .pc-preview {
+    position: absolute; inset: 0; z-index: 3;
+    width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .pc-preview[hidden] { display: none; }
+  /* lighter scrim while a preview image sits behind the progress */
+  .pc-overlay.on-preview { background: rgba(11, 16, 32, 0.45); justify-content: flex-end; padding-bottom: 2.2rem; }
+  .pc-overlay.on-preview #pcMsg {
+    padding: 0.35rem 0.8rem; border-radius: 4px; background: rgba(11, 16, 32, 0.75);
+  }
   .pc-bar { width: min(260px, 70%); height: 4px; border-radius: 2px; background: rgba(255,255,255,0.18); overflow: hidden; }
   .pc-bar[hidden] { display: none; }
   .pc-bar > div { height: 100%; width: 0; background: #6f86ff; transition: width 0.2s; }
@@ -666,6 +676,7 @@
 
     <div class="pc-stage" id="pcStage">
       <div class="pc-canvaswrap" id="pcCanvasWrap"></div>
+      <img class="pc-preview" id="pcPreview" alt="" hidden>
       <span class="vlabel pc-label">Point cloud</span>
       <span class="pc-hint">Drag to rotate, right-drag to pan, click then scroll to zoom, double-click to reset</span>
       <div class="pc-overlay" id="pcOverlay">
@@ -808,6 +819,14 @@
           <button type="button" id="pcBoxReset">Reset box to default</button>
           <span></span>
         </div>
+      </div>
+
+      <div class="group" id="pcTools" hidden>
+        <h4>Preview image</h4>
+        <p class="pc-group-note">Saves the current view as <code>preview.jpg</code>. Upload it to this
+        experiment's <code>lidar_bag</code> folder and the page shows it while the point cloud loads.
+        A <code>preview.png</code> or <code>preview.webp</code> works too.</p>
+        <button type="button" id="pcSavePreview">Download preview image</button>
       </div>
 
       <div class="group">

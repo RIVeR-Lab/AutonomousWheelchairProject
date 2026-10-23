@@ -26,7 +26,27 @@
   const BG = 0x0b1020;
 
   /* ------------------------------------------------------------ elements */
-  const $ = (id) => document.getElementById(id);
+  /* Element lookup that never returns null. If index.html is older than this script and lacks
+     a control, a harmless stand-in is used so the player still works, and the console says
+     which element is missing. */
+  const missing = new Set();
+  function standIn() {
+    return {
+      hidden: true, disabled: false, value: '', checked: false, textContent: '', innerHTML: '',
+      style: {}, options: [], classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      addEventListener() {}, removeEventListener() {}, appendChild() {}, dispatchEvent() {},
+      matches: () => false, set src(v) { if (this.onerror) setTimeout(() => this.onerror && this.onerror(), 0); },
+    };
+  }
+  const $ = (id) => {
+    const el = document.getElementById(id);
+    if (el) return el;
+    if (id !== 'pcSection' && !missing.has(id)) {
+      missing.add(id);
+      console.warn('pointcloud_player.js: #' + id + ' is not in index.html. Upload the index.html that matches this script.');
+    }
+    return id === 'pcSection' ? null : standIn();
+  };
   const section = $('pcSection');
   if (!section) return;
   const stageEl = $('pcStage');
@@ -914,18 +934,37 @@
   let loadToken = 0;
   const cache = new Map();     // experiment id -> decoded data (last few)
 
+  let checks = new Map();      // experiment id -> promise of that run with its bag URL, or null
+
+  // HEAD request with a time limit, so one slow server can't hold up the list.
+  async function exists(url) {
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), 5000) : null;
+    try {
+      const r = await fetch(url, { method: 'HEAD', cache: 'no-cache', signal: ctl ? ctl.signal : undefined });
+      return r.ok;
+    } catch (e) {
+      return false;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
   function checkAvailability() {
     if (checking) return checking;
     const list = allExps;
-    checking = Promise.all(list.map(async (exp) => {
-      for (const url of exp.sources || []) {
-        try {
-          const r = await fetch(url, { method: 'HEAD' });
-          if (r.ok) return Object.assign({}, exp, { sources: [url] });
-        } catch (e) { /* try the next location */ }
-      }
-      return null;
-    })).then((res) => {
+    checks = new Map();
+    const all = list.map((exp) => {
+      const p = (async () => {
+        for (const url of exp.sources || []) {
+          if (await exists(url)) return Object.assign({}, exp, { sources: [url] });
+        }
+        return null;
+      })();
+      checks.set(exp.id, p);
+      return p;
+    });
+    checking = Promise.all(all).then((res) => {
       if (list === allExps) available = res.filter(Boolean);
       return available;
     });
@@ -956,8 +995,28 @@
 
   async function refresh() {
     fillSelector();
-    if (!available) showOverlay('Checking which experiments have LiDAR recordings…');
-    await checkAvailability();
+    if (!available) {
+      showOverlay('Checking which experiments have LiDAR recordings…');
+      const done = checkAvailability();
+      // Start on the page's selected run as soon as its own check answers, without
+      // waiting for every other experiment.
+      const mine = wantedId != null && checks.get(wantedId);
+      if (mine) {
+        const exp = await mine;
+        if (exp && !currentId) {
+          currentId = exp.id;
+          expSel.innerHTML = '';
+          const o = document.createElement('option');
+          o.value = exp.id;
+          o.textContent = exp.name;
+          expSel.appendChild(o);
+          expSel.value = exp.id;
+          showPreview(exp);
+          loadExperiment(exp);
+        }
+      }
+      await done;
+    }
     fillSelector();
     if (!available || !available.length) {
       clearData('None of the experiments has a LiDAR recording yet.');

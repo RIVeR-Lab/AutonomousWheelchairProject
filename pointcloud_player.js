@@ -42,6 +42,32 @@
   const timeEl = $('pcTime');
   const speedEl = $('pcSpeed');
   const resetBtn = $('pcReset');
+  const previewEl = $('pcPreview');
+
+  /* A still image of each experiment, shown while its bag downloads and decodes.
+     It lives next to the bag: <folder>/lidar_bag/preview.jpg. */
+  function previewUrlFor(exp) {
+    const u = exp && exp.sources && exp.sources[0];
+    return u ? u.replace(/[^/]*$/, 'preview.jpg') : null;
+  }
+  function showPreview(exp) {
+    hidePreview();
+    const url = previewUrlFor(exp);
+    if (!url) return;
+    previewEl.onload = () => {
+      if (currentId === exp.id && !data) {
+        previewEl.hidden = false;
+        overlay.classList.add('on-preview');
+      }
+    };
+    previewEl.onerror = hidePreview;
+    previewEl.src = url;
+  }
+  function hidePreview() {
+    previewEl.onload = previewEl.onerror = null;
+    previewEl.hidden = true;
+    overlay.classList.remove('on-preview');
+  }
 
   function showOverlay(msg, fraction) {
     overlay.hidden = false;
@@ -850,6 +876,7 @@
     rebuildPath();
     fitCamera();
     setPlaying(true);
+    hidePreview();
     hideOverlay();
   }
 
@@ -947,6 +974,7 @@
     }
     currentId = exp.id;
     expSel.value = exp.id;
+    if (!cache.has(exp.id)) showPreview(exp);
     loadExperiment(exp);
   }
 
@@ -1115,6 +1143,24 @@
   syncOutputs();
   }
   writeViewInputs();
+
+  // Authoring tool, shown with ?tools in the page address: save the current view as preview.jpg.
+  if (new URLSearchParams(location.search).has('tools')) $('pcTools').hidden = false;
+  $('pcSavePreview').addEventListener('click', () => {
+    if (!engine || !data) return;
+    // Render and read back in the same task, while the frame is still in the canvas.
+    engine.renderer.render(engine.scene, engine.camera);
+    engine.renderer.domElement.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'preview.jpg';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }, 'image/jpeg', 0.88);
+  });
 
   $('pcDefaults').addEventListener('click', () => {
     view = sanitize({});

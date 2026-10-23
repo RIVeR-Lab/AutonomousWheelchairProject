@@ -1,1910 +1,1313 @@
-<!DOCTYPE html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>A Hybrid Multi-Goal Path Planning Framework for Powered Wheelchairs</title>
-<style>
-  :root {
-    --bg: #ffffff;
-    --panel: #f6f7f9;
-    --line: #dfe3e8;
-    --text: #1a1d21;
-    --muted: #5f6771;
-    --accent: #2f4bd0;
-    --ok: #1a8a46;
-    --bad: #c0392b;
-    --side: 0px;
-  }
-
-  * { box-sizing: border-box; }
-
-  body {
-    margin: 0;
-    padding: 2.5rem 1.25rem 4rem;
-    background: var(--bg);
-    color: var(--text);
-    font-family: "Times New Roman", Times, Georgia, serif;
-    font-size: 18.5px;
-    line-height: 1.55;
-  }
-
-  .wrap { max-width: 1000px; margin: 0 auto; }
-
-  .logos {
-    display: flex; align-items: center; justify-content: space-between;
-    gap: 1rem;
-    padding: 0 6%;              /* pulled in from the edges */
-    margin-bottom: 1.6rem;
-  }
-  .logos img { height: 78px; width: auto; }
-  .logos img:last-child { height: 56px; }
-  @media (max-width: 560px) {
-    .logos { padding: 0 3%; }
-    .logos img { height: 50px; }
-    .logos img:last-child { height: 36px; }
-  }
-
-  header {
-    border-bottom: 1px solid var(--line);
-    padding-bottom: 1.4rem; margin-bottom: 1.5rem;
-    text-align: center;
-  }
-  .paper-title {
-    margin: 0 0 1rem;
-    font-size: 1.6rem; font-weight: 700; line-height: 1.35;
-    max-width: 54ch; margin-inline: auto;
-    text-wrap: balance;          /* evens out the line lengths */
-    text-align: center;
-  }
-  /* explicit breaks keep the three lines near-equal; on a narrow screen they
-     drop out and the text wraps naturally instead */
-  @media (max-width: 640px) {
-    .paper-title br { display: none; }
-  }
-  .authors { margin: 0 0 0.6rem; font-size: 1.05rem; color: var(--text); }
-  .affil {
-    margin: 0 0 0.5rem; font-size: 0.9rem; color: var(--muted);
-    line-height: 1.6; max-width: 62ch; margin-inline: auto;
-  }
-  .affil a { color: #2f4bd0; text-decoration: none; }
-  .affil a:hover { text-decoration: underline; }
-  header sup { font-size: 0.7em; }
-
-  .abstract {
-    margin-bottom: 1.9rem;
-  }
-  .fig { margin: 0 0 1.5rem; }
-  .fig img {
-    display: block; width: 100%; height: auto;
-    border: 1px solid var(--line); border-radius: 6px; background: #fff;
-  }
-  .fig figcaption {
-    margin-top: 0.45rem; font-size: 0.85rem; color: var(--muted); line-height: 1.5;
-  }
-  .figrow {
-    display: grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr);
-    gap: 1.2rem; margin-bottom: 0.4rem;
-  }
-  @media (max-width: 760px) { .figrow { grid-template-columns: 1fr; } }
-
-  .section-title {
-    margin: 0 0 0.9rem;
-    font-size: 1.25rem; font-weight: 700;
-    padding-bottom: 0.4rem;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .abstract h2 {
-    margin: 0 0 0.5rem; font-size: 1.1rem; font-weight: 700;
-  }
-  .abstract p {
-    margin: 0; font-size: 1.05rem; color: var(--text);
-    line-height: 1.6; text-align: justify;
-  }
-
-  section { margin-bottom: 1.75rem; }
-
-  /* ---------- stage ---------- */
-  .stage {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #000;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-  /* the overhead sits in its own box so it can be rotated independently */
-  .mainwrap {
-    position: absolute;
-    top: 0; bottom: 0; right: 0;
-    left: var(--side);
-    overflow: hidden;
-  }
-  video.main {
-    position: absolute;
-    top: 50%; left: 50%;
-    object-fit: contain;
-    display: block; background: #000;
-  }
-
-  .loading {
-    position: absolute;
-    inset: 0;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    pointer-events: none;
-    z-index: 5;
-  }
-  .loading[hidden] { display: none; }
-  .loading .ring {
-    width: 44px; height: 44px;
-    border: 3px solid rgba(0,0,0,0.12);
-    border-top-color: var(--accent);
-    border-radius: 50%;
-    animation: spin 0.9s linear infinite;
-    box-shadow: 0 0 14px rgba(0,0,0,0.5);
-  }
-  @keyframes spin { to { transform: rotate(360deg); } }
-
-  .vlabel {
-    position: absolute;
-    top: 6px;
-    font-size: 0.88rem;
-    letter-spacing: 0.04em;
-    pointer-events: none;
-    z-index: 4;
-    white-space: nowrap;
-  }
-  .vlabel-main {
-    left: calc(var(--side) + 10px);
-    color: #ffffff;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-  }
-  .vlabel-pip {
-    left: 6px; right: 0;
-    text-align: center;
-    color: #ffffff;
-    text-shadow: 0 1px 3px rgba(0,0,0,0.9);
-  }
-  .stage.hide-pip .vlabel-pip { display: none; }
-
-  .sidecol {
-    position: absolute; top: 0; left: 0; height: 100%;
-    display: flex; flex-direction: column;
-    pointer-events: none;
-  }
-  .pip {
-    display: flex; flex: none; overflow: hidden; background: #000;
-    border-right: 1px solid rgba(0,0,0,0.28);
-    border-bottom: 1px solid rgba(0,0,0,0.28);
-  }
-  .half { position: relative; height: 100%; overflow: hidden; flex: none; }
-  .half + .half { border-left: 1px solid rgba(0,0,0,0.2); }
-  .half video { position: absolute; max-width: none; display: block; object-fit: fill; }
-
-  .plotwrap {
-    position: relative; flex: 1 1 auto; min-height: 0;
-    background: #ffffff;
-    border-right: 1px solid rgba(0,0,0,0.28);
-    display: flex; flex-direction: column;
-  }
-  .vlabel-plot {
-    flex: none;
-    padding: 4px 4px 2px;
-    text-align: center;
-    font-size: 0.78rem;
-    letter-spacing: 0.04em;
-    color: #3a3f46;
-    white-space: nowrap;
-  }
-  .canvaswrap { position: relative; flex: 1 1 auto; min-height: 0; }
-  .canvaswrap canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
-  .plotwrap .cap {
-    position: absolute; top: 4px; left: 8px;
-    font-size: 0.66rem; color: #8a8a8a;
-  }
-
-  /* ---------- transport ---------- */
-  .transport {
-    margin-top: 0.4rem;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel);
-    padding: 0.85rem 1rem;
-    display: flex; align-items: center; gap: 0.85rem;
-  }
-  button {
-    font: inherit; font-size: 0.85rem; color: var(--text);
-    background: #ffffff; border: 1px solid var(--line);
-    border-radius: 4px; padding: 0.4rem 0.9rem; cursor: pointer;
-  }
-  button:hover { border-color: #aeb6c0; background: #f0f2f5; }
-  button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-  button.primary {
-    background: var(--accent); border-color: var(--accent);
-    color: #ffffff; font-weight: 600; min-width: 6rem;
-  }
-  input[type=range] { flex: 1; min-width: 140px; accent-color: var(--accent); }
-  .time { font-variant-numeric: tabular-nums; font-size: 0.82rem; color: var(--muted); min-width: 11ch; }
-
-  .legend {
-    margin-top: 0.85rem;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel);
-    padding: 0.7rem 1rem;
-    display: flex; flex-wrap: wrap;
-    gap: 0.45rem 1.1rem;
-    font-size: 0.9rem; color: var(--muted);
-  }
-  .lg { display: inline-flex; align-items: center; gap: 0.4rem; }
-  .lg i { flex: none; display: inline-block; }
-
-  .sw-ell {
-    width: 15px; height: 9px; border-radius: 50%;
-    background: color-mix(in srgb, var(--c) 50%, transparent);
-    border: 1px solid rgba(0,0,0,0.45);
-  }
-  .sw-ped {
-    position: relative;
-    width: 15px; height: 9px; border-radius: 50%;
-    background: color-mix(in srgb, #9fe8ef 55%, transparent);
-    border: 1.5px dotted #b8bec6;
-  }
-  .sw-ped::after {
-    content: ''; position: absolute; inset: 0; margin: auto;
-    width: 5px; height: 5px; border-radius: 50%; background: #d92b2b;
-  }
-  .sw-line { width: 18px; height: 0; border-top: 2.5px solid var(--c); }
-  .sw-dash { width: 18px; height: 0; border-top: 2.5px dashed var(--c); }
-  .sw-rect { width: 12px; height: 10px; border: 1.5px solid #000000; }
-  .sw-buf  { width: 14px; height: 11px; border: 1.5px dashed #e8871e; }
-  .sw-dot  { width: 8px; height: 8px; border-radius: 50%; background: var(--c); }
-  .sw-star {
-    width: 11px; height: 11px; background: #b9a4d8;
-    clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%,
-                       79% 91%, 50% 70%, 21% 91%, 32% 57%,
-                       2% 35%, 39% 35%);
-  }
-
-  .setup {
-    margin-top: 1rem;
-    font-size: 1.02rem;
-    line-height: 1.6;
-    color: var(--text);
-  }
-  .setup p { margin: 0 0 0.7rem; text-align: justify; }
-  .setup p:last-child { margin-bottom: 0; }
-  .setup b { font-weight: 700; }
-
-  .runbar {
-    margin-top: 0.85rem;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel);
-    padding: 0.7rem 1rem;
-    display: flex; align-items: center; gap: 0.75rem;
-    font-size: 0.85rem;
-  }
-  .runbar > label { color: var(--muted); }
-  .runbar > select { flex: 1; min-width: 0; }
-
-  /* ---------- settings ---------- */
-  .settings {
-    margin-top: 0.85rem;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    background: var(--panel);
-    padding: 0.9rem 1.1rem;
-  }
-  .settings > summary {
-    cursor: pointer; font-size: 0.9rem; list-style: none;
-    display: flex; align-items: center; gap: 0.6rem;
-  }
-  .settings > summary::-webkit-details-marker { display: none; }
-  .settings > summary::before { content: '▸'; color: var(--muted); }
-  .settings[open] > summary::before { content: '▾'; }
-
-  .group { margin-top: 1rem; }
-  .group h4 {
-    margin: 0 0 0.55rem; font-size: 0.78rem; font-weight: 500;
-    text-transform: uppercase; letter-spacing: 0.06em; color: var(--muted);
-  }
-
-  .frow {
-    display: grid; grid-template-columns: 110px minmax(0,1fr) auto;
-    gap: 0.5rem 0.9rem; align-items: center;
-    font-size: 0.83rem; padding: 0.22rem 0;
-  }
-  .frow > label { color: var(--muted); }
-  input[type=file] { font: inherit; font-size: 0.78rem; color: var(--text); min-width: 0; }
-
-  .orow {
-    display: grid; grid-template-columns: 110px auto 1fr;
-    gap: 0.5rem 0.9rem; align-items: center;
-    font-size: 0.83rem; padding: 0.22rem 0;
-  }
-  .orow > label { color: var(--muted); }
-  .orow .note { font-size: 0.76rem; color: #6f767f; }
-  select {
-    font: inherit; font-size: 0.83rem;
-    background: #ffffff; color: var(--text);
-    border: 1px solid var(--line); border-radius: 4px;
-    padding: 0.3rem 0.5rem; max-width: 100%;
-  }
-  select:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-
-  input[type=number] {
-    font: inherit; font-size: 0.8rem; width: 5.5rem;
-    background: #ffffff; color: var(--text);
-    border: 1px solid var(--line); border-radius: 4px; padding: 0.25rem 0.4rem;
-  }
-
-  .status { font-size: 0.78rem; white-space: nowrap; }
-  .status.ok { color: var(--ok); }
-  .status.bad { color: var(--bad); }
-  .status.wait { color: var(--muted); }
-
-  footer {
-    border-top: 1px solid var(--line); margin-top: 1.75rem; padding-top: 1.25rem;
-    font-size: 0.8rem; color: var(--muted); max-width: 72ch;
-  }
-  kbd {
-    background: #ffffff; border: 1px solid var(--line); border-bottom-width: 2px;
-    border-radius: 3px; padding: 0 0.35rem; font-size: 0.75rem; font-family: inherit;
-  }
-
-  /* ---------- LiDAR point cloud player ---------- */
-  .pc-intro { margin: 0 0 0.85rem; font-size: 1.02rem; line-height: 1.6; text-align: justify; }
-  .pc-runbar { margin-top: 0; margin-bottom: 0.4rem; }
-  .pc-stage {
-    position: relative;
-    width: 100%;
-    aspect-ratio: 16 / 9;
-    background: #0b1020;
-    border: 1px solid var(--line);
-    border-radius: 6px;
-    overflow: hidden;
-  }
-  @media (max-width: 640px) { .pc-stage { aspect-ratio: 4 / 3; } }
-  .pc-canvaswrap { position: absolute; inset: 0; }
-  .pc-canvaswrap canvas { display: block; width: 100%; height: 100%; touch-action: none; cursor: grab; }
-  .pc-canvaswrap canvas:active { cursor: grabbing; }
-  .pc-label { left: 10px; color: #ffffff; text-shadow: 0 1px 3px rgba(0,0,0,0.9); }
-  .pc-hint {
-    position: absolute; right: 10px; bottom: 8px; z-index: 4;
-    font-size: 0.72rem; color: rgba(255,255,255,0.7); pointer-events: none;
-    text-shadow: 0 1px 2px rgba(0,0,0,0.9);
-  }
-  .pc-overlay {
-    position: absolute; inset: 0; z-index: 5;
-    display: flex; flex-direction: column; align-items: center; justify-content: center;
-    gap: 0.7rem; padding: 1.5rem; text-align: center;
-    color: #e8eefc; font-size: 0.95rem;
-    background: rgba(11, 16, 32, 0.82);
-  }
-  .pc-overlay[hidden] { display: none; }
-  .pc-preview {
-    position: absolute; inset: 0; z-index: 3;
-    width: 100%; height: 100%; object-fit: cover; display: block;
-  }
-  .pc-preview[hidden] { display: none; }
-  /* lighter scrim while a preview image sits behind the progress */
-  .pc-overlay.on-preview { background: rgba(11, 16, 32, 0.45); justify-content: flex-end; padding-bottom: 2.2rem; }
-  .pc-overlay.on-preview #pcMsg {
-    padding: 0.35rem 0.8rem; border-radius: 4px; background: rgba(11, 16, 32, 0.75);
-  }
-  .pc-bar { width: min(260px, 70%); height: 4px; border-radius: 2px; background: rgba(255,255,255,0.18); overflow: hidden; }
-  .pc-bar[hidden] { display: none; }
-  .pc-bar > div { height: 100%; width: 0; background: #6f86ff; transition: width 0.2s; }
-  .pc-transport select { flex: none; }
-  .frow input[type=color] {
-    width: 3.2rem; height: 1.8rem; padding: 2px; cursor: pointer;
-    border: 1px solid var(--line); border-radius: 4px; background: #ffffff;
-  }
-  .frow input[type=range] { min-width: 0; }
-  .frow input[type=checkbox] { justify-self: start; width: 1rem; height: 1rem; accent-color: var(--accent); }
-  .frow[hidden] { display: none; }
-  .frow output { font-size: 0.78rem; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 3.2rem; text-align: right; }
-  .frow .note { font-size: 0.76rem; color: #6f767f; }
-  input[type=number].invalid { border-color: var(--bad); }
-  .pc-group-note { margin: 0 0 0.5rem; font-size: 0.8rem; color: var(--muted); line-height: 1.5; }
-  .brow {
-    display: grid; grid-template-columns: 110px 6.5rem 6.5rem;
-    gap: 0.5rem 0.9rem; align-items: center;
-    font-size: 0.83rem; padding: 0.22rem 0;
-  }
-  .brow > label { color: var(--muted); }
-  .brow input[type=number] { width: 100%; }
-  .brow-head { padding-bottom: 0; font-size: 0.76rem; color: var(--muted); }
-  .frow button { justify-self: start; }
-  @media (max-width: 560px) {
-    .frow { grid-template-columns: 96px minmax(0,1fr) auto; }
-    .pc-hint { display: none; }
-  }
-</style>
-</head>
-<body>
-<div class="wrap">
-
-  <div class="logos">
-    <img src="NEU_logo.png" alt="Northeastern University — Institute for Experiential Robotics">
-    <img src="river_logo.png" alt="RIVeR Lab">
-  </div>
-
-  <header>
-    <h1 class="paper-title">A Hybrid Multi-Goal Path Planning Framework for<br>
-      Powered Wheelchairs in Dynamic Environments:<br>
-      From Simulation to Real-World Validation</h1>
-
-    <p class="authors">
-      Damla Leblebicioğlu<sup>1,2</sup>*, Ege Özgül<sup>1,2</sup> and Taşkın Padır<sup>1,2</sup>
-    </p>
-
-    <p class="affil">
-      <sup>1</sup>Electrical and Computer Engineering, Northeastern University<br>
-      <sup>2</sup>Institute of Experiential Robotics, Northeastern University
-    </p>
-
-    <p class="affil">
-      *Corresponding author:
-      <a href="mailto:leblebicioglu.d@northeastern.edu">leblebicioglu.d@northeastern.edu</a><br>
-      Contributing authors:
-      <a href="mailto:ozgul.e@northeastern.edu">ozgul.e@northeastern.edu</a>,
-      <a href="mailto:t.padir@northeastern.edu">t.padir@northeastern.edu</a>
-    </p>
-
-    <span id="pageTitle" hidden></span><span id="pageSubtitle" hidden></span>
-  </header>
-
-  <section class="abstract">
-    <h2>Abstract</h2>
-    <p>Autonomous powered wheelchairs (PWs) operating in human-centered environments
-    must combine efficient multi-destination path planning with continuous collision
-    avoidance strategies in the presence of static and dynamic obstacles. This paper
-    presents a hybrid framework integrating Traveling Salesman Problem (TSP)-based
-    global task ordering, Potential-Field (PF) guidance, and local Rapidly-Exploring
-    Random Tree (RRT) and A* planners. PF guidance transfers global path information
-    to the local planning layer and helps the robot remain aligned with the global
-    path during obstacle avoidance. The simulation model uses an elliptical wheelchair
-    representation to account for the platform dimensions during collision avoidance.
-    The local planning layer is enhanced through an extended-neighborhood,
-    direction-aware A* formulation or an RRT planner with weighted environment-aware
-    sampling and a two-step extension strategy. The TSP–PF–RRT and TSP–PF–A* methods
-    are evaluated in normal, crowded, and extra-crowded environments using both
-    point-based and elliptical robot models. The framework is implemented on a
-    physical PW and evaluated using motion-capture (MoCap) for ground-truth
-    measurements and onboard LiDAR and RGB-D sensing without external MoCap support.
-    A representative real-world accessibility scenario is additionally investigated in
-    simulation and hardware. Results show that incorporating the wheelchair geometry
-    changes the observed collision behavior, yielding comparable collision avoidance
-    performance between the two hybrid planners under the elliptical model.</p>
-  </section>
-
-  <h2 class="section-title">Wheelchair Setup</h2>
-
-  <figure class="fig">
-    <img src="Wheelchair_Annotated.jpg" alt="The powered wheelchair from two angles, with the Livox Mid-360 LiDAR, OptiTrack markers and two Orbbec Gemini 336L RGB-D cameras labelled.">
-    <figcaption>The instrumented powered wheelchair. A Livox Mid-360 LiDAR supplies the scans
-    used for localization outside the cage, two Orbbec Gemini 336L RGB-D cameras face forward
-    for pedestrian tracking, and OptiTrack markers give ground-truth pose inside it.</figcaption>
-  </figure>
-
-  <div class="figrow">
-    <figure class="fig">
-      <img src="Scene_Annotated.jpg" alt="The motion-capture cage, showing ceiling cameras, the wheelchair, a pedestrian and the static box obstacles.">
-      <figcaption>The experiment area inside the OptiTrack cage: ceiling cameras, the
-      wheelchair, a pedestrian acting as a dynamic obstacle, and the static boxes.</figcaption>
-    </figure>
-    <figure class="fig">
-      <img src="OptiTrack_Markers_on_Head.jpg" alt="A pedestrian wearing a cap fitted with reflective OptiTrack markers.">
-      <figcaption>Pedestrians wear a cap carrying reflective markers, so the motion-capture
-      system tracks them to the same accuracy as the wheelchair.</figcaption>
-    </figure>
-  </div>
-
-  <h2 class="section-title">Hardware Experiments</h2>
-
-  <section>
-    <div class="stage" id="stage">
-      <div class="mainwrap" id="mainwrap">
-        <video class="main" id="v0" playsinline preload="metadata" muted></video>
-      </div>
-      <span class="vlabel vlabel-main">Top view</span>
-
-      <div class="loading" id="loading" hidden><div class="ring"></div></div>
-
-      <div class="sidecol" id="sidecol">
-        <div class="pip" id="pip">
-          <span class="vlabel vlabel-pip">Wheelchair FOV</span>
-          <div class="half" id="half1">
-            <video id="v1" playsinline preload="metadata" muted></video>
-          </div>
-          <div class="half" id="half2">
-            <video id="v2" playsinline preload="metadata" muted></video>
-          </div>
-        </div>
-        <div class="plotwrap" id="plotwrap">
-          <span class="vlabel-plot">Path Animation</span>
-          <div class="canvaswrap"><canvas id="plot"></canvas></div>
-        </div>
-      </div>
-    </div>
-
-    <div class="transport">
-      <button class="primary" id="playBtn" type="button">Play all</button>
-      <input type="range" id="scrub" min="0" max="1000" value="0" step="1" aria-label="Playhead">
-      <span class="time" id="time">0:00 / 0:00</span>
-      <span class="time" id="buffer" style="min-width:0;color:var(--bad)"></span>
-    </div>
-
-    <div class="legend">
-      <span class="lg"><i class="sw-ell" style="--c:#1b3a8f"></i>wheelchair</span>
-      <span class="lg"><i class="sw-ped"></i>pedestrians</span>
-      <span class="lg"><i class="sw-line" style="--c:#1b3a8f"></i>path travelled</span>
-      <span class="lg"><i class="sw-line" style="--c:#ffb3c6"></i>global path</span>
-      <span class="lg"><i class="sw-rect"></i>rectangle</span>
-      <span class="lg"><i class="sw-buf"></i>extended rectangle</span>
-      <span class="lg"><i class="sw-star"></i>waypoint</span>
-      <span class="lg"><i class="sw-dot" style="--c:#d92b2b"></i>start</span>
-      <span class="lg"><i class="sw-dot" style="--c:#1a9e4b"></i>goal</span>
-    </div>
-
-    <div class="runbar">
-      <label for="projectSel">Experiment</label>
-      <select id="projectSel"></select>
-      <span class="status wait" id="summaryStatus" hidden></span>
-    </div>
-
-    <div class="setup">
-      <p><b>Perpendicular Walk</b>: Two pedestrians pace back and forth, one along the x axis and one along the y axis.</p>
-
-      <p><b>Random Walk</b>: Two pedestrians move randomly while two more actively try to block the wheelchair.</p>
-
-      <p><b>Global Path (PF only)</b>: No pedestrians and no local replanning, showing the baseline route.</p>
-
-      <p><b>MoCap Localization</b>: Experiments take place inside an OptiTrack motion-capture cage, where reflective markers give ground-truth pose for both the wheelchair and the pedestrians.</p>
-
-      <p><b>LiDAR Localization</b>: Experiments take place outside the cage. The wheelchair localizes from its onboard LiDAR, with LIO-SAM supplying odometry, and pedestrians are tracked by RGB-D cameras.</p>
-    </div>
-
-    <div hidden>
-    <details class="settings" id="settings">
-      <summary>Settings</summary>
-
-      <div class="group">
-        <h4>Project</h4>
-        <div class="frow">
-          <span class="status wait" id="sproj"></span>
-        </div>
-        <div class="frow">
-          <label for="rotSel">Overhead rotation</label>
-          <select id="rotSel">
-            <option value="0">0° — as recorded</option>
-            <option value="90">90° clockwise</option>
-            <option value="180">180°</option>
-            <option value="270">270° clockwise</option>
-          </select>
-          <span></span>
-        </div>
-      </div>
-
-      <div class="group">
-        <h4>Files</h4>
-
-        <div class="frow">
-          <label for="fcfg">Config</label>
-          <input type="file" id="fcfg" accept=".json">
-          <span class="status wait" id="scfg">loading…</span>
-        </div>
-
-        <div class="frow">
-          <label for="f0">Overhead</label>
-          <input type="file" id="f0" accept="video/*">
-          <span class="status wait" id="s0">checking…</span>
-        </div>
-        <div class="frow">
-          <label for="f1">Camera 1</label>
-          <input type="file" id="f1" accept="video/*">
-          <span class="status wait" id="s1">checking…</span>
-        </div>
-        <div class="frow">
-          <label for="f2">Camera 2</label>
-          <input type="file" id="f2" accept="video/*">
-          <span class="status wait" id="s2">checking…</span>
-        </div>
-        <div class="frow">
-          <label for="f3">Trajectory</label>
-          <input type="file" id="f3" accept=".csv">
-          <span class="status wait" id="s3">checking…</span>
-        </div>
-      </div>
-
-      <div class="group">
-        <h4>Start offsets</h4>
-
-        <div class="orow">
-          <label for="off0">Overhead</label>
-          <input type="number" id="off0" value="0" step="0.1">
-          <span class="note">seconds into its own footage at timeline zero</span>
-        </div>
-        <div class="orow">
-          <label for="off1">Camera 1</label>
-          <input type="number" id="off1" value="0" step="0.1">
-          <span class="note">seconds relative to the shared timeline</span>
-        </div>
-        <div class="orow">
-          <label for="off2">Camera 2</label>
-          <input type="number" id="off2" value="0" step="0.1">
-          <span class="note">negative if it started recording earlier</span>
-        </div>
-        <div class="orow">
-          <label for="rate1">Camera 1 rate</label>
-          <input type="number" id="rate1" value="1" step="0.001" min="0.1" max="10">
-          <span class="note">multiplies its clock; 1 = same speed as the timeline</span>
-        </div>
-        <div class="orow">
-          <label for="rate2">Camera 2 rate</label>
-          <input type="number" id="rate2" value="1" step="0.001" min="0.1" max="10">
-          <span class="note">raise it if the camera clock runs slow</span>
-        </div>
-        <div class="orow">
-          <label for="offPath">Path</label>
-          <input type="number" id="offPath" value="0" step="0.1">
-          <span class="note">shifts the trajectory against the video clock</span>
-        </div>
-      </div>
-    </details>
-    </div>
-  </section>
-
-  <h2 class="section-title">LiDAR Point Cloud</h2>
-
-  <section id="pcSection">
-    <p class="pc-intro">The onboard Livox Mid-360 scans of the selected experiment, replayed in the
-    map frame with the wheelchair moving along its LIO-SAM odometry. Runs inside the motion-capture
-    cage have no LiDAR recording.</p>
-
-    <div class="runbar pc-runbar">
-      <label for="pcExp">Experiment</label>
-      <select id="pcExp" aria-label="Experiment for the point cloud"></select>
-      <span class="status wait" id="pcStatus" hidden></span>
-    </div>
-
-    <div class="pc-stage" id="pcStage">
-      <div class="pc-canvaswrap" id="pcCanvasWrap"></div>
-      <img class="pc-preview" id="pcPreview" alt="" hidden>
-      <span class="vlabel pc-label">Point cloud</span>
-      <span class="pc-hint">Drag to rotate, right-drag to pan, click then scroll to zoom, double-click to reset</span>
-      <div class="pc-overlay" id="pcOverlay">
-        <span id="pcMsg">Scroll here to load the point cloud.</span>
-        <div class="pc-bar" id="pcBar" hidden><div id="pcBarFill"></div></div>
-      </div>
-    </div>
-
-    <div class="transport pc-transport">
-      <button class="primary" id="pcPlay" type="button">Play</button>
-      <input type="range" id="pcScrub" min="0" max="1000" value="0" step="1" aria-label="Point cloud playhead">
-      <span class="time" id="pcTime">0.0 s / 0.0 s</span>
-      <select id="pcSpeed" aria-label="Playback speed">
-        <option value="0.25">0.25×</option>
-        <option value="0.5">0.5×</option>
-        <option value="1" selected>1×</option>
-        <option value="2">2×</option>
-        <option value="4">4×</option>
-      </select>
-      <button id="pcReset" type="button">Reset view</button>
-    </div>
-
-    <details class="settings" id="pcSettings">
-      <summary>Visualization settings</summary>
-
-      <div class="group">
-        <h4>Points</h4>
-        <div class="frow">
-          <label for="pcColorMode">Color by</label>
-          <select id="pcColorMode">
-            <option value="height">Height</option>
-            <option value="intensity">Intensity</option>
-            <option value="time">Time</option>
-            <option value="solid">Single color</option>
-          </select>
-          <span></span>
-        </div>
-        <div class="frow" id="pcSolidRow">
-          <label for="pcSolid">Color</label>
-          <input type="color" id="pcSolid">
-          <span></span>
-        </div>
-        <div class="frow">
-          <label for="pcSize">Point size</label>
-          <input type="range" id="pcSize" min="0.2" max="6" step="0.1">
-          <output id="pcSizeOut" for="pcSize"></output>
-        </div>
-        <div class="frow">
-          <label for="pcShape">Point shape</label>
-          <select id="pcShape">
-            <option value="square">Square</option>
-            <option value="circle">Circle</option>
-            <option value="soft">Soft</option>
-          </select>
-          <span></span>
-        </div>
-      </div>
-
-      <div class="group">
-        <h4>Time window</h4>
-        <div class="frow">
-          <label for="pcWindow">Seconds shown</label>
-          <input type="number" id="pcWindow" min="0" max="120" step="0.5">
-          <span class="note">0 shows only the current scan</span>
-        </div>
-        <div class="frow">
-          <label for="pcFade">Fade older scans</label>
-          <input type="checkbox" id="pcFade">
-          <span></span>
-        </div>
-        <div class="frow">
-          <label for="pcMap">Accumulated map</label>
-          <input type="checkbox" id="pcMap">
-          <span></span>
-        </div>
-      </div>
-
-      <div class="group">
-        <h4>Path and wheelchair</h4>
-        <div class="frow">
-          <label for="pcPath">Show path</label>
-          <input type="checkbox" id="pcPath">
-          <span></span>
-        </div>
-        <div class="frow">
-          <label for="pcPathColor">Path color</label>
-          <input type="color" id="pcPathColor">
-          <span></span>
-        </div>
-        <div class="frow">
-          <label for="pcPathWidth">Path thickness</label>
-          <input type="range" id="pcPathWidth" min="0.01" max="0.5" step="0.01">
-          <output id="pcPathWidthOut" for="pcPathWidth"></output>
-        </div>
-        <div class="frow">
-          <label for="pcChair">Show wheelchair</label>
-          <input type="checkbox" id="pcChair">
-          <span></span>
-        </div>
-        <div class="frow">
-          <label for="pcChairColor">Wheelchair color</label>
-          <input type="color" id="pcChairColor">
-          <span></span>
-        </div>
-      </div>
-
-      <div class="group">
-        <h4>Static map exclusion box</h4>
-        <p class="pc-group-note">Points of the accumulated map inside this box are hidden. The played
-        scans are not affected. Coordinates are in meters, in the map frame (x forward, y left, z up
-        from the start pose), and are remembered for each experiment.</p>
-        <div class="frow">
-          <label for="pcBoxOn">Exclude points</label>
-          <input type="checkbox" id="pcBoxOn">
-          <span class="note" id="pcBoxNote"></span>
-        </div>
-        <div class="frow">
-          <label for="pcBoxShow">Show box outline</label>
-          <input type="checkbox" id="pcBoxShow">
-          <span></span>
-        </div>
-        <div class="brow brow-head"><span></span><span>Min</span><span>Max</span></div>
-        <div class="brow">
-          <label for="pcBox_xmin">X</label>
-          <input type="number" id="pcBox_xmin" step="0.1" aria-label="Box x min">
-          <input type="number" id="pcBox_xmax" step="0.1" aria-label="Box x max">
-        </div>
-        <div class="brow">
-          <label for="pcBox_ymin">Y</label>
-          <input type="number" id="pcBox_ymin" step="0.1" aria-label="Box y min">
-          <input type="number" id="pcBox_ymax" step="0.1" aria-label="Box y max">
-        </div>
-        <div class="brow">
-          <label for="pcBox_zmin">Z</label>
-          <input type="number" id="pcBox_zmin" step="0.1" aria-label="Box z min">
-          <input type="number" id="pcBox_zmax" step="0.1" aria-label="Box z max">
-        </div>
-        <div class="frow">
-          <span></span>
-          <button type="button" id="pcBoxReset">Reset box to default</button>
-          <span></span>
-        </div>
-      </div>
-
-      <div class="group" id="pcTools" hidden>
-        <h4>Preview image</h4>
-        <p class="pc-group-note">Saves the current view as <code>preview.jpg</code>. Upload it to this
-        experiment's <code>lidar_bag</code> folder and the page shows it while the point cloud loads.
-        A <code>preview.png</code> or <code>preview.webp</code> works too.</p>
-        <button type="button" id="pcSavePreview">Download preview image</button>
-      </div>
-
-      <div class="group">
-        <button type="button" id="pcDefaults">Restore default settings</button>
-      </div>
-    </details>
-  </section>
-
-</div>
-
-<script>
+/* LiDAR point cloud player for the paper page.
+ *
+ * Reads the selected experiment's filtered ROS 2 bag (<folder>/lidar_bag/lidar_bag_0_filtered.db3)
+ * straight in the browser with sql.js, decodes the Livox scans and the odometry, and replays them
+ * with the wheelchair model. No server is needed, so it works on GitHub Pages.
+ *
+ * The page's experiment script announces the selected run with an 'experiment-change' event on
+ * window ({ id, name, sources }); this player follows it.
+ */
 (function () {
-  /* ------------------------------------------------------------------ *
-   * Everything below is driven by config.json. The DEFAULTS here are a
-   * fallback for when that file can't be read — which happens when the
-   * page is opened straight from disk, since file:// blocks fetch.
-   * ------------------------------------------------------------------ */
-  const DEFAULTS = {
-    title: 'Autonomous wheelchair — experiment player',
-    subtitle: 'Overhead view with the stitched forward cameras and the planned trajectory down the left, all driven from one playhead.',
-    rawBaseUrl: 'https://raw.githubusercontent.com/egeozgul/AutonomousWheelchairProject/refs/heads/main/',
-    defaultProject: 'exp1',
-    projects: [
-      {
-        id: 'exp1',
-        name: 'Experiment 1 — A* run, 6 Aug 2026',
-        folder: 'exp1',
-        files: {
-          overhead: 'overhead_web.mp4',
-          camera1: 'cam1_detected.mp4',
-          camera2: 'cam2_detected.mp4',
-          trajectory: 'traj_astar_20260806_140501.csv'
-        },
-        offsets: { overhead: 0, camera1: 0, camera2: 0, path: 0 },
-        timeScale: { camera1: 1, camera2: 1 },
-        overheadRotation: 0,
-        environment: null,
-        showPedestrians: true
-      }
+  'use strict';
+
+  const LIBS = {
+    three: ['https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js'],
+    sql: [
+      'https://cdn.jsdelivr.net/npm/sql.js@1.10.3/dist/sql-wasm.js',
+      'https://cdnjs.cloudflare.com/ajax/libs/sql.js/1.10.3/sql-wasm.js',
     ],
-    defaults: {
-      files: {
-        overhead: 'overhead_web.mp4',
-        camera1: 'cam1_detected.mp4',
-        camera2: 'cam2_detected.mp4',
-        trajectory: 'trajectory.csv',
-        // the filtered LiDAR bag, used by the point cloud player at the bottom
-        lidarBag: 'lidar_bag/lidar_bag_0_filtered.db3'
-      },
-      offsets: { overhead: 0, camera1: 0, camera2: 0, path: 0 },
-      timeScale: { camera1: 1, camera2: 1 },
-      overheadRotation: 0
-    },
-    layout: { keepPerCamera: 1, trimTop: 0, cameraHeightPct: 50, trailSeconds: 2, cameraAspect: 0.475 },
-    sync:   { toleranceSeconds: 0.12 },
-    environments: {},
-    plot: {
-      gridMeters: 1, padMeters: 0.5,
-      chairSize: [0.605, 0.385], humanSize: [0.55, 0.35],
-      obstacleColor: '#6a5540', obstacleEdge: '#b08a5e',
-      bufferColor: '#4a4032', waypointColor: '#b9a4d8',
-      startColor: '#5fc98a', goalColor: '#e08484',
-      chairColor: '#6b7cff', routeColor: '#9aa6bb',
-      gridColor: '#1e242c', axisColor: '#2b3440',
-      humanColors: ['#e8a33d', '#57c7a3', '#e0738f', '#8f7ae0', '#c9d14a', '#4aa8d1']
-    }
   };
+  const LIDAR_TOPIC = '/livox/lidar';
+  const ODOM_TOPIC = '/vehicle/odometry';
+  const MAP_CAP = 400000;          // points in the accumulated map
+  const SCAN_CAP = 20000;          // points kept per scan for display
+  const MAX_WINDOW_SCANS = 1500;
+  const VIEW_KEY = 'pcPlayer.view';
+  const BG = 0x0b1020;
 
-  const CONFIG_SOURCES = [
-    'config.json',
-    'https://raw.githubusercontent.com/egeozgul/AutonomousWheelchairProject/refs/heads/main/config.json'
-  ];
-
-  let CFG = structuredClone(DEFAULTS);
-  let PROJECT = null;
-  let ENV = null;
-  let rotation = 0;
-
-  function merge(base, over) {
-    if (!over || typeof over !== 'object' || Array.isArray(over)) return over ?? base;
-    const out = Array.isArray(base) ? [...base] : { ...base };
-    for (const k of Object.keys(over)) out[k] = (k in base) ? merge(base[k], over[k]) : over[k];
-    return out;
-  }
-
-  const trimSlash = (x) => String(x || '').replace(/\/+$/, '');
-
-  /* A project names a folder and the files inside it. Each file resolves to a
-     relative path first, then the same path under rawBaseUrl as a fallback. */
-  function sourcesFor(proj, key) {
-    // an explicit null means "this run doesn't have one" — don't fall back
-    const name = (proj.files && key in proj.files)
-      ? proj.files[key]
-      : CFG.defaults.files[key];
-    if (!name) return [];
-    if (/^https?:/i.test(name)) return [name];
-    const rel = (proj.folder ? trimSlash(proj.folder) + '/' : '') + name;
-    const out = [rel];
-    if (CFG.rawBaseUrl) out.push(trimSlash(CFG.rawBaseUrl) + '/' + rel);
-    return out;
-  }
-
-  const offsetsFor = (proj) => merge(CFG.defaults.offsets, proj.offsets || {});
-
-  /* Map palette, fixed in the page rather than the config. */
-  const MAP = {
-    grid:         '#d8d8d8',   // 1 m grid, light grey
-    axis:         '#bdbdbd',
-    obstacleEdge: '#000000',   // hollow black rectangles
-    bufferEdge:   '#e8871e',   // orange outline around each obstacle
-    waypoint:     '#4b1d8f',   // dark purple stars
-    start:        '#d92b2b',   // red
-    goal:         '#1a9e4b',   // green
-    route:        '#ffb3c6',   // light pink connecting lines
-    label:        '#555555',
-    markerEdge:   'rgba(0,0,0,0.55)',
-    chair:        '#1b3a8f',   // path and robot share one dark blue
-    humanFill:    '#9fe8ef',   // light cyan body
-    humanEdge:    '#b8bec6',   // light grey outline
-    humanCore:    '#d92b2b',   // red centre point
-    axisFrame:    '#9a9a9a'
-  };
-  const GRID_M = 1;
-  const ZOOM = 1.1;            // fills the panel, trimming the side margins
-
-  /* Dots, line widths and label sizes are in pixels, so on a phone — where the
-     panel is a fraction of the desktop size — they'd look oversized. SC scales
-     them with the plot so the map reads the same at any width. */
-  const REF_H = 280;           // plot height this design was tuned at
-  let SC = 1;
-  const px = (v) => v * SC;
-
-  /* ---------------- elements ---------------- */
-  const stage   = document.getElementById('stage');
-  const sidecol = document.getElementById('sidecol');
-  const pip     = document.getElementById('pip');
-  const half1   = document.getElementById('half1');
-  const half2   = document.getElementById('half2');
-  const main    = document.getElementById('v0');
-  const cam1    = document.getElementById('v1');
-  const cam2    = document.getElementById('v2');
-  const playBtn = document.getElementById('playBtn');
-  const scrub   = document.getElementById('scrub');
-  const timeOut = document.getElementById('time');
-  const bufOut  = document.getElementById('buffer');
-  const loadEl  = document.getElementById('loading');
-  const offPath = document.getElementById('offPath');
-  const offMain = document.getElementById('off0');
-  const mainwrap = document.getElementById('mainwrap');
-  const canvas  = document.getElementById('plot');
-  const ctx     = canvas.getContext('2d');
-  const cfgStat = document.getElementById('scfg');
-  const trajStat = document.getElementById('s3');
-
-  // Silent by design: nothing here should ever emit audio.
-  [main, cam1, cam2].forEach(v => {
-    v.muted = true;
-    v.defaultMuted = true;
-    v.volume = 0;
-    v.addEventListener('volumechange', () => {
-      if (!v.muted || v.volume !== 0) { v.muted = true; v.volume = 0; }
-    });
-  });
-
-  const tracks = [
-    { key: 'overhead', el: main, status: document.getElementById('s0'), picker: document.getElementById('f0'), offset: null, scale: null },
-    { key: 'camera1',  el: cam1, status: document.getElementById('s1'), picker: document.getElementById('f1'), offset: document.getElementById('off1'), scale: document.getElementById('rate1') },
-    { key: 'camera2',  el: cam2, status: document.getElementById('s2'), picker: document.getElementById('f2'), offset: document.getElementById('off2'), scale: document.getElementById('rate2') }
-  ];
-  const followers = tracks.slice(1);
-
-  let traj = null;
-
-  /* ---------------- status ---------------- */
-  function fmt(t) {
-    if (!isFinite(t)) return '0:00';
-    const m = Math.floor(t / 60), s = Math.floor(t % 60);
-    return m + ':' + String(s).padStart(2, '0');
-  }
-
-  function setStatus(node, cls, text) {
-    node.className = 'status ' + cls;
-    node.textContent = text;
-    updateSummary();
-  }
-
-  function updateSummary() {
-    const expected = PROJECT
-      ? tracks.filter(t => sourcesFor(PROJECT, t.key).length).length
-        + (sourcesFor(PROJECT, 'trajectory').length ? 1 : 0)
-      : 4;
-    const loaded = tracks.filter(t => t.el.readyState >= 1).length + (traj ? 1 : 0);
-    const el = document.getElementById('summaryStatus');
-    const done = expected > 0 && loaded >= expected;
-    el.className = done ? 'status ok' : (loaded ? 'status bad' : 'status wait');
-    el.textContent = done ? 'all ' + expected + ' loaded' : loaded + ' of ' + expected + ' loaded';
-  }
-
-  /* ---------------- video sources with fallback ---------------- */
-  tracks.forEach(t => {
-    t.queue = [];
-    t.qi = 0;
-
-    t.el.addEventListener('loadedmetadata', () => {
-      setStatus(t.status, 'ok', 'loaded · ' + fmt(t.el.duration));
-      seekAll(true);
-      if (playing && t.el.readyState >= 1) t.el.play().catch(() => {});
-      layout();
-    });
-
-    t.el.addEventListener('error', () => {
-      if (t.qi < t.queue.length - 1) {     // try the next source in the list
-        t.qi++;
-        t.el.src = t.queue[t.qi];
-        t.el.load();
-        return;
-      }
-      const src = t.el.getAttribute('src') || '';
-      setStatus(t.status, 'bad', src && !src.startsWith('blob:')
-        ? 'not found — pick the file' : 'could not play this file');
-    });
-
-    t.picker.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (!file) return;
-      setStatus(t.status, 'wait', 'loading…');
-      t.queue = [];
-      t.qi = 0;
-      t.el.src = URL.createObjectURL(file);
-      t.el.load();
-    });
-  });
-
-  function startTrack(t) {
-    t.queue = sourcesFor(PROJECT, t.key);
-    t.qi = 0;
-    if (!t.queue.length) { setStatus(t.status, 'wait', 'not in this run'); return; }
-    setStatus(t.status, 'wait', 'loading…');
-    t.el.preload = 'auto';
-    t.el.src = t.queue[0];
-    t.el.load();
-  }
-
-  /* ---------------- left column ---------------- */
-  function layout() {
-    const L = CFG.layout;
-    const H = stage.clientHeight;
-    const h = H * (L.cameraHeightPct / 100);
-    if (!h) return;
-
-    const vh = h / (1 - L.trimTop);
-    // A fixed aspect keeps every run's camera panel the same width; the LiDAR
-    // rig recorded narrower frames, so those get stretched slightly to match.
-    const forced = Number(L.cameraAspect) || 0;
-    const ar = (v) => forced ||
-      ((v.videoWidth && v.videoHeight) ? v.videoWidth / v.videoHeight : 3 / 4);
-    const w1 = vh * ar(cam1);
-    const w2 = vh * ar(cam2);
-    const colW = (w1 + w2) * L.keepPerCamera;
-
-    sidecol.style.width = colW + 'px';
-    document.documentElement.style.setProperty('--side', colW + 'px');
-
-    pip.style.height = h + 'px';
-    pip.style.width  = colW + 'px';
-
-    cam1.style.height = vh + 'px';
-    cam2.style.height = vh + 'px';
-    cam1.style.width = w1 + 'px';
-    cam2.style.width = w2 + 'px';
-    cam1.style.top = (-vh * L.trimTop) + 'px';
-    cam2.style.top = (-vh * L.trimTop) + 'px';
-
-    half1.style.width = (w1 * L.keepPerCamera) + 'px';
-    cam1.style.left = '0px';
-    half2.style.width = (w2 * L.keepPerCamera) + 'px';
-    cam2.style.left = (-w2 * (1 - L.keepPerCamera)) + 'px';
-
-    layoutOverhead();
-    drawPlot();
-  }
-
-  /* The overhead video fills its box, then rotates about its centre. At 90 or
-     270 the box's width and height swap so the rotated frame still fits. */
-  function layoutOverhead() {
-    const W = mainwrap.clientWidth;
-    const H = mainwrap.clientHeight;
-    if (!W || !H) return;
-    const quarter = ((rotation % 360) + 360) % 360;
-    const swap = quarter === 90 || quarter === 270;
-    main.style.width  = (swap ? H : W) + 'px';
-    main.style.height = (swap ? W : H) + 'px';
-    main.style.transform = 'translate(-50%, -50%) rotate(' + quarter + 'deg)';
-  }
-
-  window.addEventListener('resize', layout);
-  new ResizeObserver(() => layout()).observe(stage);
-
-  /* ---------------- shared timeline ---------------- */
-  /* Every source, the overhead included, is positioned at
-     `master + its own offset`. The master clock runs on wall time rather
-     than on any one video, so all four offsets behave identically. */
-
-  let master = 0;
-  let playing = false;
-  let clockT0 = 0, clockM0 = 0;
-  let scrubbing = false;
-  let holding = false;          // true while waiting for a stalled source
-
-  /* HAVE_FUTURE_DATA: enough buffered to advance at least one frame. */
-  const READY_ENOUGH = 3;
-
-  function stalledTracks() {
-    return tracks.filter(t =>
-      t.queue && t.queue.length &&           // this run actually has this source
-      t.el.readyState >= 1 &&                // it loaded at some point
-      t.el.readyState < READY_ENOUGH &&      // but can't advance right now
-      !t.el.ended
-    );
-  }
-
-  const offsetOf = (t) => Number((t.offset || offMain).value) || 0;
-
-  /* A source's own clock runs at `scale` times the shared timeline, so it sits
-     at  master * scale + offset.  Scale stays 1 unless a camera recorded with a
-     drifting clock. */
-  function scaleOf(t) {
-    if (!t.scale) return 1;
-    const v = Number(t.scale.value);
-    return (isFinite(v) && v > 0) ? v : 1;
-  }
-
-  const trackTime = (t) => master * scaleOf(t) + offsetOf(t);
-
-  function totalDuration() {
-    let d = 0;
-    tracks.forEach(t => {
-      if (!isFinite(t.el.duration)) return;
-      // how far the timeline can run before this source reaches its end
-      d = Math.max(d, (t.el.duration - offsetOf(t)) / scaleOf(t));
-    });
-    if (traj) d = Math.max(d, traj.duration - (Number(offPath.value) || 0));
-    return d;
-  }
-
-  function seekAll(force) {
-    const tol = CFG.sync.toleranceSeconds;
-    tracks.forEach(t => {
-      if (t.el.readyState < 1 || !isFinite(t.el.duration)) return;
-      const want = Math.min(Math.max(0, trackTime(t)), t.el.duration);
-      if (force || Math.abs(t.el.currentTime - want) > tol) t.el.currentTime = want;
-    });
-  }
-
-  function anyLoaded() {
-    return tracks.some(t => t.el.readyState >= 1);
-  }
-
-  function playAll() {
-    if (!anyLoaded()) { setStatus(tracks[0].status, 'bad', 'load a video first'); return; }
-    if (master >= totalDuration()) master = 0;
-    seekAll(true);
-    playing = true;
-    clockT0 = performance.now();
-    clockM0 = master;
-    playBtn.textContent = 'Pause all';
-    tracks.forEach(t => {
-      if (t.el.readyState >= 1) {
-        t.el.playbackRate = scaleOf(t);
-        t.el.play().catch(err => setStatus(t.status, 'bad', 'blocked: ' + err.name));
-      }
-    });
-  }
-
-  function pauseAll() {
-    playing = false;
-    holding = false;
-    bufOut.textContent = '';
-    playBtn.textContent = 'Play all';
-    tracks.forEach(t => t.el.pause());
-  }
-
-  function setMaster(v, resume) {
-    master = Math.max(0, Math.min(v, totalDuration()));
-    clockM0 = master;
-    clockT0 = performance.now();
-    seekAll(true);
-    if (resume && playing) tracks.forEach(t => { if (t.el.readyState >= 1) t.el.play().catch(() => {}); });
-    drawPlot();
-  }
-
-  playBtn.addEventListener('click', () => { playing ? pauseAll() : playAll(); });
-
-  tracks.forEach(t => {
-    if (t.offset) t.offset.addEventListener('input', () => setMaster(master, true));
-    if (t.scale) t.scale.addEventListener('input', () => {
-      t.el.playbackRate = scaleOf(t);
-      setMaster(master, true);
-    });
-  });
-  offMain.addEventListener('input', () => setMaster(master, true));
-  offPath.addEventListener('input', drawPlot);
-
-  scrub.addEventListener('input', () => {
-    scrubbing = true;
-    setMaster((scrub.value / 1000) * totalDuration(), false);
-  });
-  scrub.addEventListener('change', () => {
-    scrubbing = false;
-    setMaster(master, true);
-  });
-
-  function nudge(sec) { setMaster(master + sec, true); }
-
-  document.addEventListener('keydown', e => {
-    if (e.target.matches('input')) return;
-    if (e.code === 'Space')      { e.preventDefault(); playing ? pauseAll() : playAll(); }
-    if (e.code === 'ArrowLeft')  { e.preventDefault(); nudge(-5); }
-    if (e.code === 'ArrowRight') { e.preventDefault(); nudge(5); }
-  });
-
-  /* master clock + per-frame correction */
-  (function clock() {
-    requestAnimationFrame(clock);
-
-    if (playing && !scrubbing) {
-      const stalled = stalledTracks();
-
-      if (stalled.length) {
-        // One source ran dry: stop the clock and everything else with it, so
-        // nothing drifts ahead while it refills.
-        if (!holding) {
-          holding = true;
-          tracks.forEach(t => t.el.pause());
-        }
-        bufOut.textContent = '';
-        clockM0 = master;                       // freeze the timeline here
-        clockT0 = performance.now();
-      } else if (holding) {
-        // Everyone has data again: realign and restart together.
-        holding = false;
-        bufOut.textContent = '';
-        seekAll(true);
-        clockM0 = master;
-        clockT0 = performance.now();
-        tracks.forEach(t => { if (t.el.readyState >= 1) t.el.play().catch(() => {}); });
-      } else {
-        master = clockM0 + (performance.now() - clockT0) / 1000;
-        const D = totalDuration();
-        if (D && master >= D) { master = D; pauseAll(); }
-        seekAll(false);
-      }
-    }
-
-    // spinning while a source is stalled, or still fetching its first frames
-    const waiting = holding || tracks.some(t =>
-      t.queue && t.queue.length && t.el.readyState < 1 && !t.el.error);
-    loadEl.hidden = !waiting;
-
-    const D = totalDuration();
-    if (!scrubbing && D) scrub.value = Math.max(0, Math.min(1000, (master / D) * 1000));
-    timeOut.textContent = fmt(master) + ' / ' + fmt(D);
-
-    if (traj && playing) drawPlot();
-  })();
-
-
-  /* ---------------- trajectory ---------------- */
-  function parseTrajectory(text) {
-    const lines = text.trim().split(/\r?\n/);
-    const head = lines[0].split(',').map(h => h.trim());
-    const idx = Object.fromEntries(head.map((h, i) => [h, i]));
-    const names = head.filter(h => h.endsWith('_x') && !h.startsWith('chair')).map(h => h.slice(0, -2));
-
-    const t = [], chair = [];
-    const humans = names.map(n => ({ name: n, pts: [] }));
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    const see = (x, y) => {
-      if (x < minX) minX = x; if (x > maxX) maxX = x;
-      if (y < minY) minY = y; if (y > maxY) maxY = y;
-    };
-
-    for (let i = 1; i < lines.length; i++) {
-      if (!lines[i].trim()) continue;
-      const f = lines[i].split(',');
-      t.push(parseFloat(f[idx['t']]));
-      const cx = parseFloat(f[idx['chair_x']]);
-      const cy = parseFloat(f[idx['chair_y']]);
-      chair.push({ x: cx, y: cy, yaw: parseFloat(f[idx['chair_yaw']]) });
-      see(cx, cy);
-      humans.forEach(h => {
-        const x = parseFloat(f[idx[h.name + '_x']]);
-        const y = parseFloat(f[idx[h.name + '_y']]);
-        h.pts.push({ x, y });
-        if (isFinite(x) && isFinite(y)) see(x, y);
-      });
-    }
-
-    /* A target that never moves is a parked or lost marker rather than a
-       person, so mark it and leave it off the map. */
-    const STILL_M = 0.10;
-    humans.forEach(hm => {
-      let lo = [Infinity, Infinity], hi = [-Infinity, -Infinity];
-      hm.pts.forEach(q => {
-        if (!isFinite(q.x) || !isFinite(q.y)) return;
-        lo[0] = Math.min(lo[0], q.x); hi[0] = Math.max(hi[0], q.x);
-        lo[1] = Math.min(lo[1], q.y); hi[1] = Math.max(hi[1], q.y);
-      });
-      hm.span = Math.max(hi[0] - lo[0], hi[1] - lo[1]);
-      hm.active = isFinite(hm.span) && hm.span > STILL_M;
-    });
-
-    const pad = CFG.plot.padMeters;
-    const dt = t.length > 1 ? (t[t.length - 1] - t[0]) / (t.length - 1) : 0.05;
+  /* ------------------------------------------------------------ elements */
+  /* Element lookup that never returns null. If index.html is older than this script and lacks
+     a control, a harmless stand-in is used so the player still works, and the console says
+     which element is missing. */
+  const missing = new Set();
+  function standIn() {
     return {
-      t, chair, humans, dt,
-      duration: t[t.length - 1] || 0,
-      bounds: { minX: minX - pad, maxX: maxX + pad, minY: minY - pad, maxY: maxY + pad }
+      hidden: true, disabled: false, value: '', checked: false, textContent: '', innerHTML: '',
+      style: {}, options: [], classList: { add() {}, remove() {}, toggle() {}, contains: () => false },
+      addEventListener() {}, removeEventListener() {}, appendChild() {}, dispatchEvent() {},
+      matches: () => false, set src(v) { if (this.onerror) setTimeout(() => this.onerror && this.onerror(), 0); },
     };
   }
-
-  function loadTrajectory(text) {
-    try {
-      traj = parseTrajectory(text);
-    } catch (err) {
-      traj = null;
-      setStatus(trajStat, 'bad', 'could not parse');
-      return;
+  const $ = (id) => {
+    const el = document.getElementById(id);
+    if (el) return el;
+    if (id !== 'pcSection' && !missing.has(id)) {
+      missing.add(id);
+      console.warn('pointcloud_player.js: #' + id + ' is not in index.html. Upload the index.html that matches this script.');
     }
-    setStatus(trajStat, 'ok', 'loaded · ' + traj.t.length + ' samples');
-    drawPlot();
+    return id === 'pcSection' ? null : standIn();
+  };
+  const section = $('pcSection');
+  if (!section) return;
+  const stageEl = $('pcStage');
+  const wrapEl = $('pcCanvasWrap');
+  const overlay = $('pcOverlay');
+  const overlayMsg = $('pcMsg');
+  const overlayBar = $('pcBar');
+  const overlayBarFill = $('pcBarFill');
+  const expSel = $('pcExp');
+  const statusEl = $('pcStatus');
+  const playBtn = $('pcPlay');
+  const scrubEl = $('pcScrub');
+  const timeEl = $('pcTime');
+  const speedEl = $('pcSpeed');
+  const resetBtn = $('pcReset');
+  const previewEl = $('pcPreview');
+
+  /* A still image of each experiment, shown while its bag downloads and decodes.
+     It lives next to the bag as preview.jpg, preview.png or preview.webp, tried in that order. */
+  const PREVIEW_NAMES = ['preview.jpg', 'preview.png', 'preview.webp'];
+  function previewUrlsFor(exp) {
+    const u = exp && exp.sources && exp.sources[0];
+    return u ? PREVIEW_NAMES.map((name) => u.replace(/[^/]*$/, name)) : [];
+  }
+  function showPreview(exp) {
+    hidePreview();
+    const urls = previewUrlsFor(exp);
+    let i = 0;
+    const tryNext = () => {
+      if (i >= urls.length || currentId !== exp.id) { hidePreview(); return; }
+      previewEl.src = urls[i++];
+    };
+    previewEl.onload = () => {
+      if (currentId === exp.id && !data) {
+        previewEl.hidden = false;
+        overlay.classList.add('on-preview');
+      }
+    };
+    previewEl.onerror = tryNext;
+    tryNext();
+  }
+  function hidePreview() {
+    previewEl.onload = previewEl.onerror = null;
+    previewEl.hidden = true;
+    overlay.classList.remove('on-preview');
   }
 
-  async function fetchFirst(urls) {
+  function showOverlay(msg, fraction) {
+    overlay.hidden = false;
+    overlayMsg.textContent = msg;
+    const hasBar = typeof fraction === 'number';
+    overlayBar.hidden = !hasBar;
+    if (hasBar) overlayBarFill.style.width = Math.round(Math.max(0, Math.min(1, fraction)) * 100) + '%';
+  }
+  function hideOverlay() { overlay.hidden = true; }
+  function setStatus(cls, text) {
+    statusEl.hidden = !text;
+    statusEl.className = 'status ' + cls;
+    statusEl.textContent = text || '';
+  }
+  const mb = (n) => (n / (1024 * 1024)).toFixed(1) + ' MB';
+
+  /* ------------------------------------------------------------ settings */
+  function loadView() {
+    try {
+      const v = JSON.parse(localStorage.getItem(VIEW_KEY) || '{}');
+      return v && typeof v === 'object' ? v : {};
+    } catch (e) { return {}; }
+  }
+  function saveView() {
+    try { localStorage.setItem(VIEW_KEY, JSON.stringify(view)); } catch (e) { /* unavailable */ }
+  }
+  function sanitize(v) {
+    const hex = (c, d) => (/^#[0-9a-f]{6}$/i.test(c || '') ? c : d);
+    const num = (x, lo, hi, d) => { x = Number(x); return Number.isFinite(x) ? Math.min(hi, Math.max(lo, x)) : d; };
+    const pick = (x, opts, d) => (opts.indexOf(x) >= 0 ? x : d);
+    return {
+      colorMode: pick(v.colorMode, ['height', 'intensity', 'time', 'solid'], 'intensity'),
+      solidColor: hex(v.solidColor, '#3dd6c6'),
+      pointSize: num(v.pointSize, 0.2, 6, 1.8),
+      pointShape: pick(v.pointShape, ['square', 'circle', 'soft'], 'soft'),
+      windowSec: num(v.windowSec, 0, 120, 0.5),
+      fade: v.fade !== false,
+      showMap: v.showMap !== false,
+      showPath: v.showPath !== false,
+      pathColor: hex(v.pathColor, '#ff0000'),
+      pathWidth: num(v.pathWidth, 0.01, 0.5, 0.1),
+      showChair: v.showChair !== false,
+      chairColor: hex(v.chairColor, '#7fffd4'),
+    };
+  }
+  let view = sanitize(loadView());
+
+  /* ------------------------------------------------------------ library loading */
+  function loadScript(urls) {
+    return urls.reduce((p, url) => p.catch(() => new Promise((resolve, reject) => {
+      const s = document.createElement('script');
+      s.src = url;
+      s.async = true;
+      s.onload = () => resolve(url);
+      s.onerror = () => { s.remove(); reject(new Error('Couldn’t load ' + url)); };
+      document.head.appendChild(s);
+    })), Promise.reject(new Error('start')));
+  }
+
+  let threeReady = null;
+  let sqlReady = null;
+  function ensureThree() {
+    if (!threeReady) threeReady = window.THREE ? Promise.resolve() : loadScript(LIBS.three);
+    return threeReady;
+  }
+  function ensureSql() {
+    if (!sqlReady) {
+      sqlReady = loadScript(LIBS.sql).then((url) => {
+        const base = url.slice(0, url.lastIndexOf('/') + 1);
+        return window.initSqlJs({ locateFile: (f) => base + f });
+      });
+    }
+    return sqlReady;
+  }
+
+  /* ------------------------------------------------------------ download */
+  async function fetchWithProgress(urls, onProgress, isStale) {
     for (const url of urls) {
-      try {
-        const r = await fetch(url);
-        if (r.ok) return await r.text();
-      } catch (err) { /* next */ }
+      let r;
+      try { r = await fetch(url); } catch (e) { continue; }
+      if (!r.ok) continue;
+      const total = Number(r.headers.get('content-length')) || 0;
+      if (!r.body || !r.body.getReader) {
+        const buf = new Uint8Array(await r.arrayBuffer());
+        onProgress(buf.length, buf.length);
+        return buf;
+      }
+      const reader = r.body.getReader();
+      const chunks = [];
+      let got = 0;
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        if (isStale()) { reader.cancel(); return null; }
+        chunks.push(value);
+        got += value.length;
+        onProgress(got, total);
+      }
+      const out = new Uint8Array(got);
+      let o = 0;
+      for (const c of chunks) { out.set(c, o); o += c.length; }
+      return out;
     }
     return null;
   }
 
-  document.getElementById('f3').addEventListener('change', e => {
-    const f = e.target.files[0];
-    if (!f) return;
-    setStatus(trajStat, 'wait', 'loading…');
-    f.text().then(loadTrajectory);
-  });
-
-  function sampleAt(time) {
-    const t = traj.t;
-    let lo = 0, hi = t.length - 1;
-    if (time <= t[0]) return 0;
-    if (time >= t[hi]) return hi;
-    while (lo < hi - 1) {
-      const mid = (lo + hi) >> 1;
-      if (t[mid] <= time) lo = mid; else hi = mid;
+  function checkSqlite(bytes) {
+    const head = new TextDecoder().decode(bytes.subarray(0, 40));
+    if (head.startsWith('SQLite format 3')) return;
+    if (head.startsWith('version https://git-lfs')) {
+      throw new Error('The bag on GitHub is a Git LFS pointer, not the file itself. Upload it without LFS (under 25 MB through the website, or with plain git).');
     }
-    return lo;
+    throw new Error('This file isn’t a ROS 2 SQLite bag.');
   }
 
-  /* The view has to cover the path and the room, so the obstacles don't fall
-     outside the frame on runs where the chair never went near them. */
-  function viewBounds() {
-    const pad = CFG.plot.padMeters;
-    let b = traj
-      ? { minX: traj.bounds.minX, maxX: traj.bounds.maxX,
-          minY: traj.bounds.minY, maxY: traj.bounds.maxY }
-      : { minX: Infinity, maxX: -Infinity, minY: Infinity, maxY: -Infinity };
+  /* ------------------------------------------------------------ CDR decoding */
+  const CDR_BASE = 4;
+  const align = (off, a) => CDR_BASE + (((off - CDR_BASE) + a - 1) & ~(a - 1));
 
-    const see = (x, y) => {
-      if (x - pad < b.minX) b.minX = x - pad;
-      if (x + pad > b.maxX) b.maxX = x + pad;
-      if (y - pad < b.minY) b.minY = y - pad;
-      if (y + pad > b.maxY) b.maxY = y + pad;
-    };
+  // livox_ros_driver2/CustomMsg: returns the view, the first point's offset and the point count.
+  function locatePoints(bytes) {
+    if (bytes[1] !== 1) throw new Error('Only little-endian CDR is supported.');
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let off = CDR_BASE + 8;                         // header.stamp
+    off += 4 + dv.getUint32(off, true);             // header.frame_id
+    off = align(off, 8) + 8;                        // timebase
+    off = align(off + 8, 4);                        // point_num, lidar_id, rsvd[3]
+    const cnt = dv.getUint32(off, true);
+    return { dv, off: off + 4, cnt };
+  }
 
-    if (ENV) {
-      (ENV.obstacles || []).forEach(([x, y, rw, rh]) => { see(x, y); see(x + rw, y + rh); });
-      (ENV.waypoints || []).forEach(([x, y]) => see(x, y));
-      if (ENV.start) see(ENV.start[0], ENV.start[1]);
-      if (ENV.goal)  see(ENV.goal[0],  ENV.goal[1]);
-      if (ENV.bounds) {
-        b.minX = Math.min(b.minX, ENV.bounds.xmin);
-        b.maxX = Math.max(b.maxX, ENV.bounds.xmax);
-        b.minY = Math.min(b.minY, ENV.bounds.ymin);
-        b.maxY = Math.max(b.maxY, ENV.bounds.ymax);
+  // nav_msgs/Odometry: position and orientation.
+  function parseOdometry(bytes) {
+    const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+    let off = CDR_BASE + 8;
+    off += 4 + dv.getUint32(off, true);             // header.frame_id
+    off = align(off, 4);
+    off += 4 + dv.getUint32(off, true);             // child_frame_id
+    off = align(off, 8);
+    const f = (k) => dv.getFloat64(off + 8 * k, true);
+    return [f(0), f(1), f(2), f(3), f(4), f(5), f(6)];
+  }
+
+  function quatMatrix(qx, qy, qz, qw) {
+    const n = Math.hypot(qx, qy, qz, qw) || 1;
+    qx /= n; qy /= n; qz /= n; qw /= n;
+    return [
+      1 - 2 * (qy * qy + qz * qz), 2 * (qx * qy - qz * qw), 2 * (qx * qz + qy * qw),
+      2 * (qx * qy + qz * qw), 1 - 2 * (qx * qx + qz * qz), 2 * (qy * qz - qx * qw),
+      2 * (qx * qz - qy * qw), 2 * (qy * qz + qx * qw), 1 - 2 * (qx * qx + qy * qy),
+    ];
+  }
+  const yawOf = (qx, qy, qz, qw) => Math.atan2(2 * (qw * qz + qx * qy), 1 - 2 * (qy * qy + qz * qz));
+
+  function percentile(sorted, p) {
+    if (!sorted.length) return 0;
+    return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor(p * (sorted.length - 1))))];
+  }
+
+  /* Decodes the bag into display data. Positions are stored in three.js axes
+     (x, up, -y), so ROS z (height) is the second component. */
+  async function decodeBag(SQL, bytes, onProgress, isStale) {
+    const db = new SQL.Database(bytes);
+    try {
+      const topics = (db.exec('SELECT id, name, type FROM topics')[0] || { values: [] }).values;
+      const find = (name, type) => {
+        const byName = topics.find((t) => t[1] === name);
+        if (byName) return byName[0];
+        const byType = topics.find((t) => String(t[2]).indexOf(type) >= 0);
+        return byType ? byType[0] : null;
+      };
+      const lidarId = find(LIDAR_TOPIC, 'livox_ros_driver2/msg/CustomMsg');
+      const odomId = find(ODOM_TOPIC, 'nav_msgs/msg/Odometry');
+      if (lidarId == null) throw new Error('The bag has no Livox LiDAR topic.');
+
+      // Times relative to the first scan, subtracted inside SQLite so nanosecond
+      // timestamps keep full precision (they don't fit exactly in a JS number).
+      const rows = (topicId) => {
+        const stmt = db.prepare(
+          'SELECT timestamp - (SELECT MIN(timestamp) FROM messages WHERE topic_id = $l), data ' +
+          'FROM messages WHERE topic_id = $t ORDER BY timestamp, id');
+        stmt.bind({ $l: lidarId, $t: topicId });
+        return stmt;
+      };
+
+      const odomT = [], odomP = [];
+      if (odomId != null) {
+        const st = rows(odomId);
+        while (st.step()) {
+          const r = st.get();
+          odomT.push(r[0] / 1e9);
+          odomP.push(parseOdometry(r[1]));
+        }
+        st.free();
+      }
+      const poseAt = (t) => {
+        if (!odomT.length) return null;
+        let lo = 0, hi = odomT.length - 1;
+        while (lo < hi) {
+          const mid = (lo + hi) >> 1;
+          if (odomT[mid] < t) lo = mid + 1; else hi = mid;
+        }
+        if (lo > 0 && t - odomT[lo - 1] < odomT[lo] - t) lo--;
+        return odomP[lo];
+      };
+
+      const nScans = (db.exec('SELECT COUNT(*) FROM messages WHERE topic_id = ' + Number(lidarId))[0] || { values: [[0]] }).values[0][0];
+      if (!nScans) throw new Error('The bag has no LiDAR scans.');
+
+      const frames = [];
+      let total = 0;
+      const st = rows(lidarId);
+      let i = 0;
+      while (st.step()) {
+        const r = st.get();
+        const t = r[0] / 1e9;
+        const { dv, off, cnt } = locatePoints(r[1]);
+        const pose = poseAt(t);
+        const R = pose ? quatMatrix(pose[3], pose[4], pose[5], pose[6]) : [1, 0, 0, 0, 1, 0, 0, 0, 1];
+        const tx = pose ? pose[0] : 0, ty = pose ? pose[1] : 0, tz = pose ? pose[2] : 0;
+        const stride = cnt > SCAN_CAP ? cnt / SCAN_CAP : 1;
+        const keep = Math.min(cnt, SCAN_CAP);
+        const pos = new Float32Array(keep * 3);
+        const inten = new Float32Array(keep);
+        let k = 0;
+        for (let j = 0; j < keep; j++) {
+          const p = off + Math.floor(j * stride) * 20;
+          const x = dv.getFloat32(p + 4, true), y = dv.getFloat32(p + 8, true), z = dv.getFloat32(p + 12, true);
+          if (x === 0 && y === 0 && z === 0) continue;          // "no echo" returns
+          const wx = R[0] * x + R[1] * y + R[2] * z + tx;
+          const wy = R[3] * x + R[4] * y + R[5] * z + ty;
+          const wz = R[6] * x + R[7] * y + R[8] * z + tz;
+          pos[k * 3] = wx; pos[k * 3 + 1] = wz; pos[k * 3 + 2] = -wy;
+          inten[k] = dv.getUint8(p + 16);
+          k++;
+        }
+        frames.push({ t, pos: pos.subarray(0, k * 3), inten: inten.subarray(0, k), count: k });
+        total += k;
+        i++;
+        if (i % 25 === 0) {
+          onProgress(i / nScans);
+          await new Promise((res) => setTimeout(res, 0));
+          if (isStale()) { st.free(); return null; }
+        }
+      }
+      st.free();
+
+      const traj = odomT.map((t, n) => {
+        const p = odomP[n];
+        return { t, x: p[0], y: p[2], z: -p[1], yaw: yawOf(p[3], p[4], p[5], p[6]) };
+      });
+      const t0 = frames.length ? frames[0].t : 0;
+      const duration = Math.max(frames.length ? frames[frames.length - 1].t : 0,
+                                traj.length ? traj[traj.length - 1].t : 0) - Math.min(0, t0);
+      return { frames, traj, duration, totalPoints: total, map: buildMap(frames) };
+    } finally {
+      db.close();
+    }
+  }
+
+  /* Voxel-downsamples every scan into one accumulated map. */
+  function buildMap(frames) {
+    let minX = Infinity, minY = Infinity, minZ = Infinity, maxX = -Infinity, maxY = -Infinity, maxZ = -Infinity;
+    for (const f of frames) {
+      const p = f.pos;
+      for (let i = 0; i < p.length; i += 3) {
+        if (p[i] < minX) minX = p[i]; if (p[i] > maxX) maxX = p[i];
+        if (p[i + 1] < minY) minY = p[i + 1]; if (p[i + 1] > maxY) maxY = p[i + 1];
+        if (p[i + 2] < minZ) minZ = p[i + 2]; if (p[i + 2] > maxZ) maxZ = p[i + 2];
       }
     }
-
-    if (!isFinite(b.minX)) b = { minX: -1, maxX: 1, minY: -1, maxY: 1 };
-    return b;
-  }
-
-  /* ---- routing the dashed line around the obstacles ----------------------
-     Legs that would cut through a buffered rectangle are replaced by the
-     shortest corner-to-corner detour. Nodes are the rectangle corners plus the
-     two endpoints; an edge exists where the straight segment clears every
-     rectangle, and Dijkstra picks the cheapest chain. Touching a corner or
-     sliding along an edge is allowed, so the line hugs the outlines. ---- */
-
-  const EPS = 1e-6;
-
-  function bufferedRects(env) {
-    const b = Number(env.buffer) || 0;
-    return (env.obstacles || []).map(([x, y, w, h]) =>
-      [x - b, y - b, w + 2 * b, h + 2 * b]);
-  }
-
-  function insideRect(p, r) {
-    return p[0] > r[0] + EPS && p[0] < r[0] + r[2] - EPS &&
-           p[1] > r[1] + EPS && p[1] < r[1] + r[3] - EPS;
-  }
-
-  function properCross(a, b, c, d) {
-    const side = (o, p, q) =>
-      (p[0] - o[0]) * (q[1] - o[1]) - (p[1] - o[1]) * (q[0] - o[0]);
-    const d1 = side(c, d, a), d2 = side(c, d, b);
-    const d3 = side(a, b, c), d4 = side(a, b, d);
-    return ((d1 > EPS && d2 < -EPS) || (d1 < -EPS && d2 > EPS)) &&
-           ((d3 > EPS && d4 < -EPS) || (d3 < -EPS && d4 > EPS));
-  }
-
-  function cornersOf(r) {
-    return [[r[0], r[1]], [r[0] + r[2], r[1]],
-            [r[0] + r[2], r[1] + r[3]], [r[0], r[1] + r[3]]];
-  }
-
-  function segmentBlocked(p, q, rects) {
-    const mid = [(p[0] + q[0]) / 2, (p[1] + q[1]) / 2];
-    for (const r of rects) {
-      // a point already inside this rectangle can't be helped by avoiding it
-      if (insideRect(p, r) || insideRect(q, r)) continue;
-
-      // Corner-to-corner diagonals cross the interior without ever properly
-      // crossing an edge. Rectangles are convex, so if both ends sit on the
-      // boundary and the segment passes through, the midpoint is inside.
-      if (insideRect(mid, r)) return true;
-
-      const c = cornersOf(r);
-      for (let i = 0; i < 4; i++) {
-        if (properCross(p, q, c[i], c[(i + 1) % 4])) return true;
-      }
-    }
-    return false;
-  }
-
-  function detour(from, to, rects) {
-    if (!segmentBlocked(from, to, rects)) return [from, to];
-
-    const nodes = [from, to];
-    rects.forEach(r => cornersOf(r).forEach(c => {
-      if (!rects.some(other => insideRect(c, other))) nodes.push(c);
-    }));
-
-    const n = nodes.length;
-    const adj = Array.from({ length: n }, () => []);
-    for (let i = 0; i < n; i++) {
-      for (let j = i + 1; j < n; j++) {
-        if (segmentBlocked(nodes[i], nodes[j], rects)) continue;
-        const w = Math.hypot(nodes[i][0] - nodes[j][0], nodes[i][1] - nodes[j][1]);
-        adj[i].push([j, w]);
-        adj[j].push([i, w]);
-      }
-    }
-
-    const dist = Array(n).fill(Infinity);
-    const prev = Array(n).fill(-1);
-    const done = Array(n).fill(false);
-    dist[0] = 0;
-
+    if (!Number.isFinite(minX)) return { pos: new Float32Array(0), inten: new Float32Array(0), count: 0, bounds: null };
+    let voxel = 0.05;
     for (;;) {
-      let u = -1, best = Infinity;
-      for (let i = 0; i < n; i++) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
-      if (u < 0 || u === 1) break;
-      done[u] = true;
-      for (const [v, w] of adj[u]) {
-        if (dist[u] + w < dist[v]) { dist[v] = dist[u] + w; prev[v] = u; }
+      const nx = Math.floor((maxX - minX) / voxel) + 1;
+      const ny = Math.floor((maxY - minY) / voxel) + 1;
+      const seen = new Set();
+      const pos = [], inten = [];
+      let over = false;
+      for (const f of frames) {
+        const p = f.pos;
+        for (let i = 0, j = 0; i < p.length; i += 3, j++) {
+          const key = Math.floor((p[i] - minX) / voxel) +
+            nx * (Math.floor((p[i + 1] - minY) / voxel) + ny * Math.floor((p[i + 2] - minZ) / voxel));
+          if (seen.has(key)) continue;
+          seen.add(key);
+          pos.push(p[i], p[i + 1], p[i + 2]);
+          inten.push(f.inten[j]);
+          if (seen.size > MAP_CAP) { over = true; break; }
+        }
+        if (over) break;
       }
+      if (!over) {
+        return {
+          pos: new Float32Array(pos), inten: new Float32Array(inten), count: inten.length,
+          bounds: { minX, maxX, minY, maxY, minZ, maxZ },
+        };
+      }
+      voxel *= 1.5;
     }
-
-    if (!isFinite(dist[1])) return [from, to];   // no way round; draw it straight
-
-    const out = [];
-    for (let v = 1; v !== -1; v = prev[v]) out.push(nodes[v]);
-    return out.reverse();
   }
 
-  let routeCache = { key: null, pts: [] };
-
-  function routedPath(env, stops) {
-    const key = JSON.stringify([env.name, stops, env.buffer, env.obstacles]);
-    if (routeCache.key === key) return routeCache.pts;
-
-    const rects = bufferedRects(env);
-    const pts = [];
-    for (let i = 0; i < stops.length - 1; i++) {
-      const leg = detour(stops[i], stops[i + 1], rects);
-      leg.forEach((pt, n) => { if (i === 0 || n > 0) pts.push(pt); });
-    }
-    routeCache = { key, pts };
-    return pts;
+  /* ------------------------------------------------------------ rendering helpers */
+  function heatColor(t, out, o) {
+    const x = Math.min(1, Math.max(0, t));
+    out[o] = x < 0.5 ? 0.05 + 0.4 * (x / 0.5) : 0.45 + 0.55 * ((x - 0.5) / 0.5);
+    out[o + 1] = x < 0.5 ? 0.55 + 0.4 * (x / 0.5) : 0.95 - 0.25 * ((x - 0.5) / 0.5);
+    out[o + 2] = x < 0.5 ? 0.85 - 0.55 * (x / 0.5) : 0.3 - 0.25 * ((x - 0.5) / 0.5);
   }
 
-  function drawEnvironment(ctx, X, Y, k) {
-    if (!ENV) return;
-    const P = CFG.plot;
+  /* The wheelchair in one material, so its color can be set from the panel. */
+  function buildWheelchair(THREE, mat) {
+    const vehicle = new THREE.Group();
+    const track = 0.52, wheelbase = 0.58, seatH = 0.42;
+    const add = (geo, x, y, z) => { const m = new THREE.Mesh(geo, mat); m.position.set(x, y, z); vehicle.add(m); return m; };
 
-    // safety-buffered footprint, dashed
-    const buf = Number(ENV.buffer) || 0;
-    if (buf > 0) {
-      ctx.strokeStyle = MAP.bufferEdge;
-      ctx.lineWidth = Math.max(0.8, px(1.4));
-      ctx.setLineDash([px(4), px(3)]);
-      (ENV.obstacles || []).forEach(([x, y, rw, rh]) => {
-        ctx.strokeRect(X(x - buf), Y(y + rh + buf),
-                       (rw + 2 * buf) * k, (rh + 2 * buf) * k);
+    add(new THREE.BoxGeometry(0.42, 0.08, 0.55), 0, 0.14, 0.02);                    // chassis
+    add(new THREE.BoxGeometry(0.40, 0.06, 0.38), 0, seatH, 0.06);                   // seat
+    add(new THREE.BoxGeometry(0.40, 0.42, 0.06), 0, seatH + 0.24, 0.22).rotation.x = -0.12;   // backrest
+    for (const side of [-1, 1]) {
+      add(new THREE.BoxGeometry(0.05, 0.04, 0.32), side * 0.22, seatH + 0.16, 0.02);           // armrest
+      add(new THREE.CylinderGeometry(0.018, 0.018, 0.16, 10), side * 0.22, seatH + 0.08, 0.14);
+      add(new THREE.CylinderGeometry(0.016, 0.016, 0.36, 10), side * 0.18, seatH - 0.06, 0.18);
+    }
+    add(new THREE.BoxGeometry(0.34, 0.03, 0.18), 0, 0.10, -0.38);                    // footrest
+    add(new THREE.BoxGeometry(0.34, 0.04, 0.02), 0, 0.125, -0.46);
+
+    function wheel(x, z, r, w) {
+      const g = new THREE.Group();
+      [[r, w, 20], [r * 0.55, w * 1.05, 16], [r * 0.18, w * 1.15, 12]].forEach(([rr, ww, seg]) => {
+        const c = new THREE.Mesh(new THREE.CylinderGeometry(rr, rr, ww, seg), mat);
+        c.rotation.z = Math.PI / 2;
+        g.add(c);
       });
-      ctx.setLineDash([]);
+      g.position.set(x, r, z);
+      vehicle.add(g);
     }
+    const rearR = 0.16, frontR = 0.09, rearZ = wheelbase * 0.42, frontZ = -wheelbase * 0.48;
+    wheel(-track / 2, rearZ, rearR, 0.055);
+    wheel(track / 2, rearZ, rearR, 0.055);
+    wheel(-track / 2, frontZ, frontR, 0.045);
+    wheel(track / 2, frontZ, frontR, 0.045);
+    add(new THREE.CylinderGeometry(0.012, 0.012, track * 0.92, 8), 0, rearR, rearZ).rotation.z = Math.PI / 2;
+    add(new THREE.ConeGeometry(0.04, 0.1, 10), 0, 0.16, -0.50).rotation.x = Math.PI / 2;   // points forward
+    return vehicle;
+  }
 
-    // obstacles themselves
-    ctx.strokeStyle = MAP.obstacleEdge;
-    ctx.lineWidth = Math.max(0.9, px(1.6));
-    (ENV.obstacles || []).forEach(([x, y, rw, rh]) => {
-      // canvas y grows downward, so the top edge is y + rh in world space
-      ctx.strokeRect(X(x), Y(y + rh), rw * k, rh * k);
-    });
+  /* Orbit (drag), pan (right-drag or Shift-drag) and zoom (wheel or pinch).
+     The wheel only zooms after the view has been clicked, so scrolling the page
+     past the player doesn't get captured. */
+  function attachControls(THREE, camera, element) {
+    const target = new THREE.Vector3();
+    const home = { position: new THREE.Vector3(), target: new THREE.Vector3() };
+    const sph = new THREE.Spherical();
+    const off = new THREE.Vector3();
+    const pointers = new Map();
+    let mode = null, pinchStart = 0, pinchRadius = 0, engaged = false;
 
-    /* Visiting order. `waypointOrder` lists waypoints by their 1-based number
-       (w1 = 1); without it they're visited in the order they're listed. */
-    const wps = ENV.waypoints || [];
-    const order = Array.isArray(ENV.waypointOrder) && ENV.waypointOrder.length
-      ? ENV.waypointOrder
-      : wps.map((_, n) => n + 1);
-
-    const route = [];
-    if (ENV.start) route.push(ENV.start);
-    order.forEach(n => { const pt = wps[n - 1]; if (pt) route.push(pt); });
-    if (ENV.goal) route.push(ENV.goal);
-
-    if (route.length > 1) {
-      const path = routedPath(ENV, route);
-      ctx.strokeStyle = MAP.route;
-      ctx.lineWidth = Math.max(1.2, px(2.2));
-      ctx.lineJoin = 'round';
-      ctx.beginPath();
-      path.forEach(([x, y], n) => n ? ctx.lineTo(X(x), Y(y)) : ctx.moveTo(X(x), Y(y)));
-      ctx.stroke();
+    function sync() { off.copy(camera.position).sub(target); sph.setFromVector3(off); }
+    function apply() {
+      sph.phi = Math.max(0.02, Math.min(Math.PI - 0.02, sph.phi));
+      sph.radius = Math.max(0.2, Math.min(1500, sph.radius));
+      off.setFromSpherical(sph);
+      camera.position.copy(target).add(off);
+      camera.lookAt(target);
+      camera.updateMatrixWorld();
     }
+    function pan(dx, dy) {
+      const perPx = 2 * sph.radius * Math.tan(THREE.MathUtils.degToRad(camera.fov / 2)) / (element.clientHeight || 1);
+      target.addScaledVector(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0), -dx * perPx);
+      target.addScaledVector(new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1), dy * perPx);
+    }
+    const pinchDist = () => { const p = Array.from(pointers.values()); return Math.hypot(p[0].x - p[1].x, p[0].y - p[1].y); };
 
-    // waypoints
-    ctx.fillStyle = MAP.waypoint;
-    wps.forEach(([x, y]) => {
-      const sx = X(x), sy = Y(y);
-      ctx.beginPath();
-      for (let n = 0; n < 10; n++) {                 // five-pointed star
-        const a = -Math.PI / 2 + n * Math.PI / 5;
-        const r = px(n % 2 ? 1.95 : 4.5);
-        n ? ctx.lineTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r)
-          : ctx.moveTo(sx + Math.cos(a) * r, sy + Math.sin(a) * r);
-      }
-      ctx.closePath();
-      ctx.fill();
+    element.addEventListener('contextmenu', (e) => e.preventDefault());
+    element.addEventListener('pointerdown', (e) => {
+      engaged = true;
+      element.classList.add('engaged');
+      element.setPointerCapture(e.pointerId);
+      pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pointers.size === 2) { mode = 'pinch'; pinchStart = pinchDist(); pinchRadius = sph.radius; }
+      else if (pointers.size === 1) mode = (e.button === 2 || e.button === 1 || e.shiftKey) ? 'pan' : 'orbit';
     });
-
-    const marker = (pt, col) => {
-      if (!pt) return;
-      ctx.fillStyle = col;
-      ctx.beginPath();
-      ctx.arc(X(pt[0]), Y(pt[1]), Math.max(2, px(3.5)), 0, Math.PI * 2);
-      ctx.fill();
+    element.addEventListener('pointermove', (e) => {
+      const prev = pointers.get(e.pointerId);
+      if (!prev) return;
+      const dx = e.clientX - prev.x, dy = e.clientY - prev.y;
+      prev.x = e.clientX; prev.y = e.clientY;
+      if (mode === 'orbit') { sph.theta -= dx * 0.006; sph.phi -= dy * 0.006; }
+      else if (mode === 'pan') pan(dx, dy);
+      else if (mode === 'pinch' && pointers.size === 2) { const d = pinchDist(); if (d > 0) sph.radius = pinchRadius * (pinchStart / d); }
+      apply();
+    });
+    const release = (e) => {
+      pointers.delete(e.pointerId);
+      if (!pointers.size) mode = null;
+      else if (pointers.size === 1 && mode === 'pinch') mode = 'orbit';
     };
-    marker(ENV.start, MAP.start);
-    marker(ENV.goal,  MAP.goal);
+    element.addEventListener('pointerup', release);
+    element.addEventListener('pointercancel', release);
+    element.addEventListener('pointerleave', () => { if (!pointers.size) { engaged = false; element.classList.remove('engaged'); } });
+    element.addEventListener('wheel', (e) => {
+      if (!engaged) return;
+      e.preventDefault();
+      sph.radius *= Math.exp(e.deltaY * 0.0012);
+      apply();
+    }, { passive: false });
+    element.addEventListener('dblclick', reset);
+
+    function reset() { camera.position.copy(home.position); target.copy(home.target); sync(); apply(); }
+    function setHome(position, tgt) { home.position.copy(position); home.target.copy(tgt); reset(); }
+    return { reset, setHome };
   }
 
-  /* Markers are ellipses whose long axis lies along the direction of travel.
-     Sizes are in metres, so they scale with the plot. World angles run
-     counter-clockwise with y up; canvas rotation is the other way round. */
-  function drawMarker(ctx, sx, sy, k, lenM, widM, angle, fill, stroke, alpha, dotted) {
-    ctx.save();
-    ctx.translate(sx, sy);
-    ctx.rotate(-angle);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, (lenM / 2) * k, (widM / 2) * k, 0, 0, Math.PI * 2);
-    ctx.globalAlpha = (alpha === undefined) ? 1 : alpha;   // fill only
-    ctx.fillStyle = fill;
-    ctx.fill();
-    ctx.globalAlpha = 1;
-    if (stroke) {
-      ctx.strokeStyle = stroke;
-      ctx.lineWidth = Math.max(0.8, px(1.2));
-      if (dotted) ctx.setLineDash([Math.max(1, px(1.6)), Math.max(1, px(1.6))]);
-      ctx.stroke();
-      ctx.setLineDash([]);
+  /* ------------------------------------------------------------ the engine */
+  let engine = null;
+
+  function createEngine(THREE) {
+    const renderer = new THREE.WebGLRenderer({ antialias: true, powerPreference: 'high-performance' });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+    renderer.setClearColor(BG, 1);
+    wrapEl.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.fog = new THREE.FogExp2(BG, 0.012);
+    const camera = new THREE.PerspectiveCamera(60, 16 / 9, 0.05, 2000);
+    scene.add(new THREE.GridHelper(40, 40, 0x2a3a5a, 0x162033));
+    scene.add(new THREE.AmbientLight(0x8899bb, 0.85));
+    const key = new THREE.DirectionalLight(0xffffff, 0.7);
+    key.position.set(5, 10, 3);
+    scene.add(key);
+
+    const mapGeo = new THREE.BufferGeometry();
+    const mapMat = new THREE.PointsMaterial({ size: 0.045, vertexColors: true, sizeAttenuation: true, transparent: true, opacity: 0.85 });
+    const mapPoints = new THREE.Points(mapGeo, mapMat);
+    scene.add(mapPoints);
+
+    const scanGeo = new THREE.BufferGeometry();
+    const scanMat = new THREE.PointsMaterial({ size: 0.07, vertexColors: true, sizeAttenuation: true });
+    const scanPoints = new THREE.Points(scanGeo, scanMat);
+    scene.add(scanPoints);
+
+    const pathMat = new THREE.MeshBasicMaterial({ transparent: true, opacity: 0.3, side: THREE.DoubleSide, depthWrite: false });
+    const doneMat = new THREE.MeshBasicMaterial({ side: THREE.DoubleSide, depthTest: false, fog: false });
+    const pathMesh = new THREE.Mesh(new THREE.BufferGeometry(), pathMat);
+    const doneMesh = new THREE.Mesh(new THREE.BufferGeometry(), doneMat);
+    doneMesh.renderOrder = 10;
+    scene.add(pathMesh);
+    scene.add(doneMesh);
+
+    const chairMat = new THREE.MeshStandardMaterial({ color: view.chairColor, metalness: 0.1, roughness: 0.55 });
+    const vehicle = buildWheelchair(THREE, chairMat);
+    scene.add(vehicle);
+
+    // Outline of the box that removes points from the static map.
+    const boxHelper = new THREE.LineSegments(
+      new THREE.EdgesGeometry(new THREE.BoxGeometry(1, 1, 1)),
+      new THREE.LineBasicMaterial({ color: 0xff66aa, transparent: true, opacity: 0.9 }));
+    boxHelper.visible = false;
+    scene.add(boxHelper);
+
+    const controls = attachControls(THREE, camera, renderer.domElement);
+    renderer.domElement.classList.add('pc-canvas');
+
+    function resize() {
+      const w = wrapEl.clientWidth, h = wrapEl.clientHeight;
+      if (!w || !h) return;
+      renderer.setSize(w, h, false);
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
     }
-    ctx.restore();
+    new ResizeObserver(resize).observe(wrapEl);
+    resize();
+
+    return { THREE, renderer, scene, camera, controls, mapGeo, mapMat, mapPoints, scanGeo, scanMat, scanPoints,
+             pathMat, doneMat, pathMesh, doneMesh, vehicle, chairMat, boxHelper, sprites: {} };
   }
 
-  /* Heading from recent displacement; falls back to the last usable one so a
-     stationary person doesn't spin. */
-  function headingAt(pts, i, memo, key) {
-    for (let back = 1; back <= 20 && i - back >= 0; back++) {
-      const a = pts[i - back], b = pts[i];
-      const dx = b.x - a.x, dy = b.y - a.y;
-      if (Math.hypot(dx, dy) > 0.02) {
-        memo[key] = Math.atan2(dy, dx);
-        return memo[key];
-      }
+  /* ------------------------------------------------------------ player state */
+  let data = null;            // decoded bag
+  let tNow = 0;
+  let playing = true;
+  let speed = 1;
+  let shownKey = '';
+  let colorVersion = 0;
+  const colorCache = new Map();
+  let ranges = { zLo: 0, zHi: 1, iLo: 0, iHi: 1 };
+
+  function colorsFor(pos, inten, mode, tNorm) {
+    const n = inten.length;
+    const out = new Float32Array(n * 3);
+    if (mode === 'solid') {
+      const c = new engine.THREE.Color(view.solidColor);
+      for (let i = 0; i < n; i++) { out[i * 3] = c.r; out[i * 3 + 1] = c.g; out[i * 3 + 2] = c.b; }
+      return out;
     }
-    return memo[key] || 0;
+    const zs = 1 / Math.max(1e-6, ranges.zHi - ranges.zLo);
+    const is = 1 / Math.max(1e-6, ranges.iHi - ranges.iLo);
+    for (let i = 0; i < n; i++) {
+      const t = mode === 'intensity' ? (inten[i] - ranges.iLo) * is
+        : mode === 'time' ? tNorm
+        : (pos[i * 3 + 1] - ranges.zLo) * zs;
+      heatColor(t, out, i * 3);
+    }
+    return out;
   }
 
-  const headingMemo = {};
+  /* ---- exclusion box for the static map, in ROS axes (x forward, y left, z up) ---- */
+  const BOX_KEYS = ['xmin', 'xmax', 'ymin', 'ymax', 'zmin', 'zmax'];
+  let exclude = null;          // { enabled, show, xmin … zmax } for the current experiment
+  let excludeKey = null;
 
-  /* Everything inside the plotting box: grid, room, path, people. */
-  function drawScene(P, b, X, Y, k) {
-    const g = GRID_M;
-    ctx.strokeStyle = MAP.grid; ctx.lineWidth = Math.max(0.6, px(1));
-    ctx.beginPath();
-    for (let x = Math.ceil(b.minX / g) * g; x <= b.maxX; x += g) { ctx.moveTo(X(x), Y(b.minY)); ctx.lineTo(X(x), Y(b.maxY)); }
-    for (let y = Math.ceil(b.minY / g) * g; y <= b.maxY; y += g) { ctx.moveTo(X(b.minX), Y(y)); ctx.lineTo(X(b.maxX), Y(y)); }
-    ctx.stroke();
+  // Default exclusion box for every experiment (map frame, meters).
+  const DEFAULT_BOX = { enabled: true, show: false, xmin: -2.8, xmax: 4.9, ymin: -4, ymax: 3.7, zmin: -0.7, zmax: 3.5 };
+  function defaultBox() { return Object.assign({}, DEFAULT_BOX); }
 
-    ctx.strokeStyle = MAP.axis;
-    ctx.beginPath();
-    ctx.moveTo(X(0), Y(b.minY)); ctx.lineTo(X(0), Y(b.maxY));
-    ctx.moveTo(X(b.minX), Y(0)); ctx.lineTo(X(b.maxX), Y(0));
-    ctx.stroke();
+  function loadExclude(expId) {
+    excludeKey = 'pcPlayer.exclude.' + expId;
+    let saved = null;
+    try { saved = JSON.parse(localStorage.getItem(excludeKey) || 'null'); } catch (e) { saved = null; }
+    const base = defaultBox();
+    exclude = Object.assign(base, saved && typeof saved === 'object' ? saved : {});
+    BOX_KEYS.forEach((k) => { if (!Number.isFinite(Number(exclude[k]))) exclude[k] = base[k]; exclude[k] = Number(exclude[k]); });
+    exclude.enabled = !!exclude.enabled;
+    exclude.show = !!exclude.show;
+  }
+  function saveExclude() {
+    if (!excludeKey || !exclude) return;
+    try { localStorage.setItem(excludeKey, JSON.stringify(exclude)); } catch (e) { /* unavailable */ }
+  }
 
-    drawEnvironment(ctx, X, Y, k);
-
-    if (!traj) return;
-    const i = sampleAt(master + (Number(offPath.value) || 0));
-
-    ctx.strokeStyle = MAP.chair; ctx.lineWidth = Math.max(1.2, px(2.5));
-    ctx.beginPath();
-    for (let n = 0; n <= i; n++) {
-      const p = traj.chair[n];
-      n ? ctx.lineTo(X(p.x), Y(p.y)) : ctx.moveTo(X(p.x), Y(p.y));
+  function filteredMap() {
+    const m = data.map;
+    if (!exclude || !exclude.enabled) return { pos: m.pos, inten: m.inten, hidden: 0 };
+    const e = exclude;
+    const pos = new Float32Array(m.pos.length);
+    const inten = new Float32Array(m.inten.length);
+    let k = 0;
+    for (let i = 0; i < m.count; i++) {
+      const x = m.pos[i * 3], z = m.pos[i * 3 + 1], y = -m.pos[i * 3 + 2];
+      if (x >= e.xmin && x <= e.xmax && y >= e.ymin && y <= e.ymax && z >= e.zmin && z <= e.zmax) continue;
+      pos[k * 3] = m.pos[i * 3]; pos[k * 3 + 1] = m.pos[i * 3 + 1]; pos[k * 3 + 2] = m.pos[i * 3 + 2];
+      inten[k] = m.inten[i];
+      k++;
     }
-    ctx.stroke();
+    return { pos: pos.subarray(0, k * 3), inten: inten.subarray(0, k), hidden: m.count - k };
+  }
 
-    const hs = P.humanSize || [0.55, 0.35];
+  function refreshMapColors() {
+    if (!data) return;
+    const E = engine, THREE = E.THREE;
+    const mode = view.colorMode === 'time' ? 'height' : view.colorMode;
+    const fm = filteredMap();
+    E.mapGeo.setAttribute('position', new THREE.BufferAttribute(fm.pos, 3));
+    E.mapGeo.setAttribute('color', new THREE.BufferAttribute(colorsFor(fm.pos, fm.inten, mode, 0), 3));
+    E.mapGeo.computeBoundingSphere();
+    updateBoxHelper();
+    $('pcBoxNote').textContent = exclude && exclude.enabled
+      ? 'Hiding ' + fm.hidden.toLocaleString() + ' of ' + data.map.count.toLocaleString() + ' map points'
+      : '';
+  }
 
-    // runs with no participants log tracker slots that aren't people
-    const showPeople = !(PROJECT && PROJECT.showPedestrians === false);
-    if (showPeople) traj.humans.forEach((hm, n) => {
-      if (hm.active === false) return;
-      const p = hm.pts[i];
-      if (!p || !isFinite(p.x) || !isFinite(p.y)) return;
-      const a = headingAt(hm.pts, i, headingMemo, hm.name);
-      drawMarker(ctx, X(p.x), Y(p.y), k, hs[0], hs[1], a,
-                 MAP.humanFill, MAP.humanEdge, 0.55, true);
+  function updateBoxHelper() {
+    if (!engine) return;
+    const h = engine.boxHelper;
+    h.visible = !!data && !!exclude && exclude.show && view.showMap;
+    if (!exclude) return;
+    const e = exclude;
+    h.position.set((e.xmin + e.xmax) / 2, (e.zmin + e.zmax) / 2, -(e.ymin + e.ymax) / 2);
+    h.scale.set(Math.max(1e-3, e.xmax - e.xmin), Math.max(1e-3, e.zmax - e.zmin), Math.max(1e-3, e.ymax - e.ymin));
+  }
 
-      // exact position at the centre of the ellipse
-      ctx.fillStyle = MAP.humanCore;
-      ctx.beginPath();
-      ctx.arc(X(p.x), Y(p.y), Math.max(1.6, px(2.8)), 0, Math.PI * 2);
-      ctx.fill();
+  function writeBoxInputs() {
+    $('pcBoxOn').checked = exclude.enabled;
+    $('pcBoxShow').checked = exclude.show;
+    BOX_KEYS.forEach((k) => {
+      const el = $('pcBox_' + k);
+      el.value = exclude[k].toFixed(2);
+      el.classList.remove('invalid');
     });
-
-    const c = traj.chair[i];
-    drawMarker(ctx, X(c.x), Y(c.y), k, hs[0], hs[1], c.yaw,
-               MAP.chair, MAP.markerEdge, 0.5);
-    ctx.fillStyle = MAP.chair;
-    ctx.beginPath();
-    ctx.arc(X(c.x), Y(c.y), Math.max(1, px(1.8)), 0, Math.PI * 2);
-    ctx.fill();
   }
 
-  /* The frame and the metre ticks down the left and along the bottom. */
-  function drawAxes(b, X, Y, area) {
-    const g = GRID_M;
-    ctx.strokeStyle = MAP.axisFrame;
-    ctx.lineWidth = Math.max(0.8, px(1));
-    ctx.strokeRect(area.x + 0.5, area.y + 0.5, area.w - 1, area.h - 1);
-
-    ctx.fillStyle = MAP.label;
-    ctx.font = Math.max(7, px(9.5)).toFixed(1) + 'px "Times New Roman", Times, serif';
-
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'top';
-    for (let x = Math.ceil(b.minX / g) * g; x <= b.maxX; x += g) {
-      const sx = X(x);
-      if (sx < area.x + 6 || sx > area.x + area.w - 6) continue;
-      ctx.fillText(String(Math.round(x)), sx, area.y + area.h + px(3));
-    }
-
-    ctx.textAlign = 'right';
-    ctx.textBaseline = 'middle';
-    for (let y = Math.ceil(b.minY / g) * g; y <= b.maxY; y += g) {
-      const py = Y(y);
-      if (py < area.y + 5 || py > area.y + area.h - 5) continue;
-      ctx.fillText(String(Math.round(y)), area.x - px(4), py);
-    }
-
-    // axis titles
-    ctx.font = Math.max(7.5, px(10)).toFixed(1) + 'px "Times New Roman", Times, serif';
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'alphabetic';
-    ctx.fillText('x (m)', area.x + area.w / 2, area.y + area.h + px(25));
-
-    ctx.save();
-    ctx.translate(px(11), area.y + area.h / 2);
-    ctx.rotate(-Math.PI / 2);
-    ctx.fillText('y (m)', 0, 0);
-    ctx.restore();
-
-    ctx.textAlign = 'start';
-    ctx.textBaseline = 'alphabetic';
+  function invalidateColors() {
+    colorVersion++;
+    colorCache.clear();
+    shownKey = '';
   }
 
-  function drawPlot() {
-    const P = CFG.plot;
-    if (!traj && !ENV) return;
-    const dpr = window.devicePixelRatio || 1;
-    const w = canvas.clientWidth, h = canvas.clientHeight;
-    if (!w || !h) return;
-    if (canvas.width !== Math.round(w * dpr) || canvas.height !== Math.round(h * dpr)) {
-      canvas.width = Math.round(w * dpr);
-      canvas.height = Math.round(h * dpr);
-    }
-    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
-    ctx.clearRect(0, 0, w, h);
-
-    SC = Math.min(1.4, Math.max(0.45, Math.min(w, h * 1.4) / REF_H));
-
-    // room for the tick labels on the left and underneath
-    const M = { l: px(34), r: px(8), t: px(8), b: px(28) };
-    const area = { x: M.l, y: M.t, w: w - M.l - M.r, h: h - M.t - M.b };
-    if (area.w < 30 || area.h < 30) return;
-
-    const b = viewBounds();
-    const k = Math.min(area.w / (b.maxX - b.minX), area.h / (b.maxY - b.minY)) * ZOOM;
-    const left = area.x + (area.w - (b.maxX - b.minX) * k) / 2;
-    const top  = area.y + (area.h - (b.maxY - b.minY) * k) / 2;
-    const X = (x) => left + (x - b.minX) * k;
-    const Y = (y) => top + (b.maxY - y) * k;
-
-    ctx.save();
-    ctx.beginPath();
-    ctx.rect(area.x, area.y, area.w, area.h);
-    ctx.clip();
-    drawScene(P, b, X, Y, k);
-    ctx.restore();
-
-    drawAxes(b, X, Y, area);
-  }
-
-  /* ---------------- projects ---------------- */
-  const projectSel = document.getElementById('projectSel');
-  const projStat   = document.getElementById('sproj');
-
-  function loadProject(proj) {
-    PROJECT = proj;
-
-    const off = offsetsFor(proj);
-    offMain.value = off.overhead;
-    document.getElementById('off1').value = off.camera1;
-    document.getElementById('off2').value = off.camera2;
-    offPath.value = off.path;
-
-    const scales = merge(CFG.defaults.timeScale, proj.timeScale || {});
-    document.getElementById('rate1').value = scales.camera1;
-    document.getElementById('rate2').value = scales.camera2;
-    tracks.forEach(t => { if (t.scale) t.el.playbackRate = scaleOf(t); });
-
-    ENV = (CFG.environments || {})[proj.environment] || null;
-
-    rotation = Number(
-      proj.overheadRotation !== undefined
-        ? proj.overheadRotation
-        : CFG.defaults.overheadRotation
-    ) || 0;
-    rotSel.value = String(((rotation % 360) + 360) % 360);
-
-    pauseAll();
-    master = 0;
-    traj = null;
-
-    tracks.forEach(startTrack);
-
-    setStatus(trajStat, 'wait', 'loading…');
-    const wanted = proj;
-    const trajUrls = sourcesFor(proj, 'trajectory');
-    if (!trajUrls.length) {
-      setStatus(trajStat, 'wait', 'not in this run');
+  function spriteTexture(kind) {
+    const E = engine;
+    if (E.sprites[kind]) return E.sprites[kind];
+    const c = document.createElement('canvas');
+    c.width = c.height = 64;
+    const g = c.getContext('2d');
+    if (kind === 'circle') {
+      g.fillStyle = '#ffffff';
+      g.beginPath();
+      g.arc(32, 32, 30, 0, Math.PI * 2);
+      g.fill();
     } else {
-      fetchFirst(trajUrls).then(txt => {
-        if (PROJECT !== wanted) return;          // a different run was picked meanwhile
-        if (txt == null) setStatus(trajStat, 'bad', 'not found — pick the file');
-        else loadTrajectory(txt);
-      });
+      const grad = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+      grad.addColorStop(0, 'rgba(255,255,255,1)');
+      grad.addColorStop(0.45, 'rgba(255,255,255,0.75)');
+      grad.addColorStop(1, 'rgba(255,255,255,0)');
+      g.fillStyle = grad;
+      g.fillRect(0, 0, 64, 64);
     }
-
-    setStatus(projStat, 'ok', proj.folder ? trimSlash(proj.folder) + '/' : 'root');
-    layout();
-
-    // Tell the point cloud player which run is selected, and every run's bag location.
-    window.__experiment = lidarInfo(proj);
-    window.dispatchEvent(new CustomEvent('experiment-change', {
-      detail: Object.assign({ all: window.__experimentList || [] }, window.__experiment),
-    }));
+    E.sprites[kind] = new E.THREE.CanvasTexture(c);
+    return E.sprites[kind];
   }
 
-  /* Where a run's filtered LiDAR bag lives, for the point cloud player. */
-  function lidarInfo(proj) {
-    const lidarDefault = (CFG.defaults.files && CFG.defaults.files.lidarBag) || DEFAULTS.defaults.files.lidarBag;
-    const lidarProj = (proj.files && 'lidarBag' in proj.files)
-      ? proj
-      : Object.assign({}, proj, { files: Object.assign({}, proj.files, { lidarBag: lidarDefault }) });
-    return { id: proj.id, name: proj.name || proj.id, sources: sourcesFor(lidarProj, 'lidarBag') };
+  function applyPointStyle() {
+    if (!engine) return;
+    [[engine.mapMat, 0.045, 0.85], [engine.scanMat, 0.07, 1]].forEach(([m, base, opacity]) => {
+      m.size = base * view.pointSize;
+      m.opacity = opacity;
+      if (view.pointShape === 'soft') {
+        m.map = spriteTexture('soft'); m.alphaTest = 0.02; m.transparent = true; m.depthWrite = false;
+      } else {
+        m.map = view.pointShape === 'circle' ? spriteTexture('circle') : null;
+        m.alphaTest = view.pointShape === 'circle' ? 0.5 : 0;
+        m.transparent = opacity < 1;
+        m.depthWrite = true;
+      }
+      m.needsUpdate = true;
+    });
+    engine.mapPoints.visible = !!data && view.showMap;
+    updateBoxHelper();
   }
 
-  const rotSel = document.getElementById('rotSel');
-  rotSel.addEventListener('change', () => {
-    rotation = Number(rotSel.value) || 0;
-    layoutOverhead();
-  });
+  /* WebGL lines are one pixel wide, so the path is a ribbon: a flat strip plus an
+     upright one, which keeps its thickness from any angle. */
+  function ribbon(pts, width, lift) {
+    const THREE = engine.THREE;
+    const geo = new THREE.BufferGeometry();
+    const n = pts.length;
+    if (n < 2) { geo.setAttribute('position', new THREE.BufferAttribute(new Float32Array(3), 3)); geo.setDrawRange(0, 0); return geo; }
+    const pos = new Float32Array(n * 12);
+    const half = width / 2;
+    let sx = 1, sz = 0;
+    for (let i = 0; i < n; i++) {
+      const a = pts[Math.max(0, i - 1)], b = pts[Math.min(n - 1, i + 1)];
+      const tx = b.x - a.x, tz = b.z - a.z, len = Math.hypot(tx, tz);
+      if (len > 1e-6) { sx = -tz / len; sz = tx / len; }
+      const p = pts[i], y = p.y + lift, o = i * 12;
+      pos.set([p.x + sx * half, y, p.z + sz * half, p.x - sx * half, y, p.z - sz * half,
+               p.x, y + half, p.z, p.x, y - half, p.z], o);
+    }
+    const idx = new Uint32Array((n - 1) * 12);
+    for (let i = 0; i < n - 1; i++) {
+      const a = i * 4, b = a + 4;
+      idx.set([a, a + 1, b, a + 1, b + 1, b, a + 2, a + 3, b + 2, a + 3, b + 3, b + 2], i * 12);
+    }
+    geo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    geo.setIndex(new THREE.BufferAttribute(idx, 1));
+    geo.computeBoundingSphere();
+    return geo;
+  }
 
-  projectSel.addEventListener('change', () => {
-    const proj = CFG.projects.find(p => p.id === projectSel.value);
-    if (proj) loadProject(proj);
-  });
+  function rebuildPath() {
+    if (!engine) return;
+    const E = engine;
+    E.pathMesh.geometry.dispose();
+    E.doneMesh.geometry.dispose();
+    const pts = data ? data.traj : [];
+    E.pathMesh.geometry = ribbon(pts, view.pathWidth, 0);
+    E.doneMesh.geometry = ribbon(pts, view.pathWidth, 0.06);
+    E.doneMesh.geometry.setDrawRange(0, 0);
+    applyPathStyle();
+  }
 
-  function applyConfig() {
-    document.getElementById('pageTitle').textContent = CFG.title;
-    document.getElementById('pageSubtitle').textContent = CFG.subtitle;
+  function applyPathStyle() {
+    if (!engine) return;
+    engine.pathMat.color.set(view.pathColor);
+    engine.doneMat.color.set(view.pathColor);
+    const on = !!data && view.showPath && data.traj.length > 1;
+    engine.pathMesh.visible = on;
+    engine.doneMesh.visible = on;
+    engine.vehicle.visible = !!data && view.showChair && data.traj.length > 0;
+    engine.chairMat.color.set(view.chairColor);
+  }
 
-    const projects = Array.isArray(CFG.projects) ? CFG.projects.filter(Boolean) : [];
-    projectSel.innerHTML = projects
-      .map(p => '<option value="' + p.id + '">' + (p.name || p.id) + '</option>')
-      .join('');
-    projectSel.disabled = projects.length < 2;
+  function trajIndexAt(t) {
+    const tr = data.traj;
+    let lo = 0, hi = tr.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (tr[mid].t <= t) lo = mid + 1; else hi = mid; }
+    return lo;   // number of samples at or before t
+  }
 
-    if (!projects.length) {
-      setStatus(projStat, 'bad', 'no projects in config');
+  function frameIndexAt(t) {
+    const fr = data.frames;
+    let lo = 0, hi = fr.length;
+    while (lo < hi) { const mid = (lo + hi) >> 1; if (fr[mid].t <= t) lo = mid + 1; else hi = mid; }
+    return Math.max(0, lo - 1);
+  }
+
+  function updateVehicle() {
+    const tr = data.traj;
+    if (!tr.length) return;
+    const k = trajIndexAt(tNow);
+    engine.doneMesh.geometry.setDrawRange(0, Math.max(0, k - 1) * 12);
+    let x, y, z, yaw;
+    if (k <= 0) ({ x, y, z, yaw } = tr[0]);
+    else if (k >= tr.length) ({ x, y, z, yaw } = tr[tr.length - 1]);
+    else {
+      const a = tr[k - 1], b = tr[k];
+      const u = (tNow - a.t) / Math.max(1e-6, b.t - a.t);
+      x = a.x + (b.x - a.x) * u; y = a.y + (b.y - a.y) * u; z = a.z + (b.z - a.z) * u;
+      let d = b.yaw - a.yaw;
+      d = Math.atan2(Math.sin(d), Math.cos(d));
+      yaw = a.yaw + d * u;
+    }
+    // The model faces -z; turn it to the ROS heading (x forward, y left).
+    engine.vehicle.position.set(x, y - 0.02, z);
+    engine.vehicle.rotation.set(0, Math.atan2(-Math.cos(yaw), Math.sin(yaw)), 0);
+  }
+
+  function updateScans() {
+    const fr = data.frames;
+    const E = engine, THREE = E.THREE;
+    const idx = frameIndexAt(tNow);
+    const tCur = fr[idx].t;
+    let start = idx;
+    if (view.windowSec > 0) {
+      while (start > 0 && idx - start < MAX_WINDOW_SCANS && fr[start - 1].t >= tCur - view.windowSec) start--;
+    }
+    const fading = view.fade && view.windowSec > 0;
+    const keyNow = start + ':' + idx + ':' + colorVersion + ':' + (fading ? 1 : 0);
+    if (keyNow === shownKey) return;
+    shownKey = keyNow;
+
+    for (const k of Array.from(colorCache.keys())) if (k < start || k > idx) colorCache.delete(k);
+    let total = 0;
+    for (let i = start; i <= idx; i++) total += fr[i].count;
+    const pos = new Float32Array(Math.max(1, total) * 3);
+    const col = new Float32Array(Math.max(1, total) * 3);
+    let o = 0;
+    for (let i = start; i <= idx; i++) {
+      const f = fr[i];
+      if (!f.count) continue;
+      let c = colorCache.get(i);
+      if (!c) {
+        c = colorsFor(f.pos, f.inten, view.colorMode, data.duration > 0 ? f.t / data.duration : 0);
+        colorCache.set(i, c);
+      }
+      pos.set(f.pos, o);
+      const fade = fading ? 1 - 0.75 * Math.min(1, (tCur - f.t) / view.windowSec) : 1;
+      if (fade >= 0.999) col.set(c, o);
+      else for (let j = 0; j < c.length; j++) col[o + j] = c[j] * fade;
+      o += f.pos.length;
+    }
+    E.scanGeo.setAttribute('position', new THREE.BufferAttribute(pos, 3));
+    E.scanGeo.setAttribute('color', new THREE.BufferAttribute(col, 3));
+    E.scanGeo.setDrawRange(0, total);
+    E.scanGeo.computeBoundingSphere();
+  }
+
+  function updateTransport() {
+    const d = data ? data.duration : 0;
+    timeEl.textContent = tNow.toFixed(1) + ' s / ' + d.toFixed(1) + ' s';
+    if (!scrubEl.matches(':active')) scrubEl.value = d > 0 ? String(Math.round((tNow / d) * 1000)) : '0';
+  }
+
+  function setPlaying(on) {
+    playing = on;
+    playBtn.textContent = on ? 'Pause' : 'Play';
+  }
+
+  /* ------------------------------------------------------------ loading data into the scene */
+  function fitCamera() {
+    const E = engine, THREE = E.THREE;
+    const b = data.map.bounds;
+    let center, radius;
+    if (b) {
+      center = new THREE.Vector3((b.minX + b.maxX) / 2, (b.minY + b.maxY) / 2, (b.minZ + b.maxZ) / 2);
+      radius = Math.max(b.maxX - b.minX, b.maxZ - b.minZ, 4) * 0.6;
+    } else {
+      center = new THREE.Vector3();
+      radius = 6;
+    }
+    E.controls.setHome(new THREE.Vector3(center.x + radius, center.y + radius * 0.8, center.z + radius), center);
+  }
+
+  function computeRanges() {
+    const sample = (arr, stride, step) => {
+      const out = [];
+      const n = Math.floor(arr.length / stride);
+      const jump = Math.max(1, Math.floor(n / 50000));
+      for (let i = 0; i < n; i += jump) out.push(arr[i * stride + step]);
+      return out.sort((a, b) => a - b);
+    };
+    const zs = sample(data.map.pos, 3, 1);
+    const is = sample(data.map.inten, 1, 0);
+    ranges = { zLo: percentile(zs, 0.02), zHi: percentile(zs, 0.98), iLo: percentile(is, 0.02), iHi: percentile(is, 0.98) };
+  }
+
+  function useData(d, expId) {
+    data = d;
+    tNow = data.frames.length ? Math.max(0, data.frames[0].t) : 0;
+    loadExclude(expId);
+    writeBoxInputs();
+    computeRanges();
+    invalidateColors();
+    refreshMapColors();
+    applyPointStyle();
+    rebuildPath();
+    fitCamera();
+    setPlaying(true);
+    hidePreview();
+    hideOverlay();
+  }
+
+  function clearData(message) {
+    data = null;
+    shownKey = '';
+    if (engine) {
+      engine.mapPoints.visible = false;
+      engine.scanGeo.setDrawRange(0, 0);
+      engine.pathMesh.visible = engine.doneMesh.visible = false;
+      engine.vehicle.visible = false;
+      engine.boxHelper.visible = false;
+    }
+    $('pcBoxNote').textContent = '';
+    tNow = 0;
+    updateTransport();
+    showOverlay(message);
+  }
+
+  /* ------------------------------------------------------------ experiment selection */
+  /* The selector lists only experiments whose bag is actually there. Each run's bag is
+     checked with a HEAD request (no download) when the section first comes into view. */
+  let allExps = window.__experimentList || [];
+  let wantedId = window.__experiment ? window.__experiment.id : null;   // the page's selected run
+  let available = null;        // runs with a bag, each with the one URL that answered
+  let checking = null;
+  let currentId = null;        // the run shown in the viewer
+  let loadingId = null;        // the run being downloaded or decoded
+  let activated = false;
+  let loadToken = 0;
+  const cache = new Map();     // experiment id -> decoded data (last few)
+
+  let checks = new Map();      // experiment id -> promise of that run with its bag URL, or null
+
+  // HEAD request with a time limit, so one slow server can't hold up the list.
+  async function exists(url) {
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const timer = ctl ? setTimeout(() => ctl.abort(), 5000) : null;
+    try {
+      const r = await fetch(url, { method: 'HEAD', cache: 'no-cache', signal: ctl ? ctl.signal : undefined });
+      return r.ok;
+    } catch (e) {
+      return false;
+    } finally {
+      if (timer) clearTimeout(timer);
+    }
+  }
+
+  function checkAvailability() {
+    if (checking) return checking;
+    const list = allExps;
+    checks = new Map();
+    const all = list.map((exp) => {
+      const p = (async () => {
+        for (const url of exp.sources || []) {
+          if (await exists(url)) return Object.assign({}, exp, { sources: [url] });
+        }
+        return null;
+      })();
+      checks.set(exp.id, p);
+      return p;
+    });
+    checking = Promise.all(all).then((res) => {
+      if (list === allExps) available = res.filter(Boolean);
+      return available;
+    });
+    return checking;
+  }
+
+  function fillSelector() {
+    if (!available) {
+      expSel.innerHTML = '<option>Checking for LiDAR recordings…</option>';
+      expSel.disabled = true;
       return;
     }
-
-    window.__experimentList = projects.map(lidarInfo);
-
-    const wanted = new URLSearchParams(location.search).get('project') || CFG.defaultProject;
-    const proj = projects.find(p => p.id === wanted) || projects[0];
-    projectSel.value = proj.id;
-    loadProject(proj);
-  }
-
-  function useConfig(raw, label) {
-    try {
-      CFG = merge(DEFAULTS, JSON.parse(raw));
-      setStatus(cfgStat, 'ok', label);
-    } catch (err) {
-      CFG = structuredClone(DEFAULTS);
-      setStatus(cfgStat, 'bad', 'invalid JSON — using defaults');
+    if (!available.length) {
+      expSel.innerHTML = '<option>No LiDAR recordings available</option>';
+      expSel.disabled = true;
+      return;
     }
-    applyConfig();
+    expSel.innerHTML = '';
+    available.forEach((exp) => {
+      const o = document.createElement('option');
+      o.value = exp.id;
+      o.textContent = exp.name;
+      expSel.appendChild(o);
+    });
+    expSel.disabled = available.length < 2;
+    if (currentId) expSel.value = currentId;
   }
 
-  document.getElementById('fcfg').addEventListener('change', e => {
-    const f = e.target.files[0];
-    if (f) f.text().then(txt => useConfig(txt, 'loaded · ' + f.name));
+  async function refresh() {
+    fillSelector();
+    if (!available) {
+      showOverlay('Checking which experiments have LiDAR recordings…');
+      const done = checkAvailability();
+      // Start on the page's selected run as soon as its own check answers, without
+      // waiting for every other experiment.
+      const mine = wantedId != null && checks.get(wantedId);
+      if (mine) {
+        const exp = await mine;
+        if (exp && !currentId) {
+          currentId = exp.id;
+          expSel.innerHTML = '';
+          const o = document.createElement('option');
+          o.value = exp.id;
+          o.textContent = exp.name;
+          expSel.appendChild(o);
+          expSel.value = exp.id;
+          showPreview(exp);
+          loadExperiment(exp);
+        }
+      }
+      await done;
+    }
+    fillSelector();
+    if (!available || !available.length) {
+      clearData('None of the experiments has a LiDAR recording yet.');
+      return;
+    }
+    // Follow the page's selected run when it has a recording; otherwise keep the one
+    // already shown, or start with the first run that has one.
+    const target = available.find((e) => e.id === wantedId)
+      || available.find((e) => e.id === currentId)
+      || available[0];
+    show(target);
+  }
+
+  function show(exp) {
+    // already showing it, or still loading it
+    if (exp.id === currentId && (loadingId === exp.id || (data && cache.get(exp.id) === data))) {
+      expSel.value = exp.id;
+      return;
+    }
+    currentId = exp.id;
+    expSel.value = exp.id;
+    if (!cache.has(exp.id)) showPreview(exp);
+    loadExperiment(exp);
+  }
+
+  async function loadExperiment(exp) {
+    loadingId = exp ? exp.id : null;
+    try { await loadExperimentInner(exp); } finally { if (loadingId === (exp && exp.id)) loadingId = null; }
+  }
+
+  async function loadExperimentInner(exp) {
+    const token = ++loadToken;
+    const stale = () => token !== loadToken;
+    if (!exp) { clearData('Choose an experiment above.'); return; }
+    if (!exp.sources || !exp.sources.length) { clearData('This experiment has no LiDAR recording.'); setStatus('wait', ''); return; }
+
+    try {
+      showOverlay('Loading the 3D viewer…');
+      setStatus('wait', 'loading…');
+      await ensureThree();
+      if (stale()) return;
+      if (!engine) { engine = createEngine(window.THREE); applyPointStyle(); requestAnimationFrame(tick); }
+
+      if (cache.has(exp.id)) {
+        useData(cache.get(exp.id), exp.id);
+        setStatus('ok', cache.get(exp.id).label);
+        return;
+      }
+      clearData('Downloading the LiDAR recording…');
+      const sqlP = ensureSql();
+      const bytes = await fetchWithProgress(exp.sources, (got, total) => {
+        if (stale()) return;
+        showOverlay('Downloading the LiDAR recording… ' + mb(got) + (total ? ' of ' + mb(total) : ''),
+                    total ? got / total : undefined);
+      }, stale);
+      if (stale()) return;
+      if (!bytes) { clearData('Couldn’t download the LiDAR recording for this experiment.'); setStatus('bad', 'error'); return; }
+      checkSqlite(bytes);
+
+      showOverlay('Preparing the decoder…');
+      const SQL = await sqlP;
+      if (stale()) return;
+      const decoded = await decodeBag(SQL, bytes, (f) => {
+        if (!stale()) showOverlay('Decoding scans… ' + Math.round(f * 100) + '%', f);
+      }, stale);
+      if (stale() || !decoded) return;
+      if (!decoded.frames.length) throw new Error('The bag has no LiDAR scans.');
+      const pts = decoded.totalPoints >= 1e6 ? (decoded.totalPoints / 1e6).toFixed(2) + 'M'
+        : decoded.totalPoints.toLocaleString();
+      decoded.label = decoded.frames.length.toLocaleString() + ' scans, ' + pts + ' points, ' + mb(bytes.length);
+      cache.set(exp.id, decoded);
+      while (cache.size > 3) cache.delete(cache.keys().next().value);
+      useData(decoded, exp.id);
+      setStatus('ok', decoded.label);
+    } catch (err) {
+      if (stale()) return;
+      console.error(err);
+      clearData('Couldn’t show this recording: ' + (err && err.message ? err.message : err));
+      setStatus('bad', 'error');
+    }
+  }
+
+  const sameList = (a, b) => a.length === b.length &&
+    a.every((e, i) => e.id === b[i].id && JSON.stringify(e.sources) === JSON.stringify(b[i].sources));
+
+  window.addEventListener('experiment-change', (e) => {
+    const d = e.detail || {};
+    wantedId = d.id;
+    if (Array.isArray(d.all) && !sameList(d.all, allExps)) {
+      allExps = d.all;                 // a different config was loaded: check again
+      checking = null;
+      available = null;
+    }
+    if (!activated) return;
+    if (!available) { refresh(); return; }
+    const exp = available.find((x) => x.id === d.id);
+    if (exp) show(exp);                // runs without a recording leave the viewer as it is
   });
 
-  (async function boot() {
-    const raw = await fetchFirst(CONFIG_SOURCES);
-    if (raw == null) {
-      setStatus(cfgStat, 'bad', 'not found — using defaults');
-      applyConfig();
-    } else {
-      useConfig(raw, 'loaded');
+  expSel.addEventListener('change', () => {
+    const exp = available && available.find((x) => x.id === expSel.value);
+    if (!exp) return;
+    show(exp);
+    const main = $('projectSel');      // switch the rest of the page to the same run
+    if (main && main.value !== exp.id && Array.from(main.options || []).some((o) => o.value === exp.id)) {
+      main.value = exp.id;
+      main.dispatchEvent(new Event('change'));
     }
-  })();
+  });
+
+  function activate() {
+    if (activated) return;
+    activated = true;
+    refresh();
+  }
+
+  let visible = false;
+  if ('IntersectionObserver' in window) {
+    new IntersectionObserver((entries) => {
+      for (const en of entries) {
+        if (en.isIntersecting) activate();
+      }
+    }, { rootMargin: '400px 0px' }).observe(section);
+    new IntersectionObserver((entries) => {
+      for (const en of entries) visible = en.isIntersecting;
+    }).observe(stageEl);
+  } else {
+    visible = true;
+    activate();
+  }
+
+  /* ------------------------------------------------------------ transport */
+  playBtn.addEventListener('click', () => {
+    if (!data) return;
+    if (!playing && tNow >= data.duration - 1e-3) tNow = 0;
+    setPlaying(!playing);
+  });
+  scrubEl.addEventListener('input', () => {
+    if (!data) return;
+    setPlaying(false);
+    tNow = (Number(scrubEl.value) / 1000) * data.duration;
+  });
+  speedEl.addEventListener('change', () => { speed = Number(speedEl.value) || 1; });
+  resetBtn.addEventListener('click', () => { if (engine) engine.controls.reset(); });
+
+  let last = performance.now();
+  function tick(now) {
+    requestAnimationFrame(tick);
+    const dt = Math.max(0, Math.min(0.25, (now - last) / 1000));
+    last = now;
+    if (!visible || !engine) return;
+    if (data) {
+      if (playing) {
+        tNow += dt * speed;
+        if (tNow > data.duration) tNow = 0;          // loop
+      }
+      updateScans();
+      updateVehicle();
+      updateTransport();
+    }
+    engine.renderer.render(engine.scene, engine.camera);
+  }
+
+  /* ------------------------------------------------------------ settings panel */
+  function bind(id, event, apply) {
+    const el = $(id);
+    el.addEventListener(event, () => { apply(el); syncOutputs(); saveView(); });
+    return el;
+  }
+  function syncOutputs() {
+    $('pcSolidRow').hidden = view.colorMode !== 'solid';
+    $('pcSizeOut').textContent = view.pointSize.toFixed(1) + '×';
+    $('pcPathWidthOut').textContent = Math.round(view.pathWidth * 100) + ' cm';
+  }
+  function writeViewInputs() {
+  $('pcColorMode').value = view.colorMode;
+  $('pcSolid').value = view.solidColor;
+  $('pcSize').value = String(view.pointSize);
+  $('pcShape').value = view.pointShape;
+  $('pcWindow').value = String(view.windowSec);
+  $('pcFade').checked = view.fade;
+  $('pcMap').checked = view.showMap;
+  $('pcPath').checked = view.showPath;
+  $('pcPathColor').value = view.pathColor;
+  $('pcPathWidth').value = String(view.pathWidth);
+  $('pcChair').checked = view.showChair;
+  $('pcChairColor').value = view.chairColor;
+  syncOutputs();
+  }
+  writeViewInputs();
+
+  // Authoring tool, shown with ?tools in the page address: save the current view as preview.jpg.
+  if (new URLSearchParams(location.search).has('tools')) $('pcTools').hidden = false;
+  $('pcSavePreview').addEventListener('click', () => {
+    if (!engine || !data) return;
+    // Render and read back in the same task, while the frame is still in the canvas.
+    engine.renderer.render(engine.scene, engine.camera);
+    engine.renderer.domElement.toBlob((blob) => {
+      if (!blob) return;
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = 'preview.jpg';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+    }, 'image/jpeg', 0.88);
+  });
+
+  $('pcDefaults').addEventListener('click', () => {
+    view = sanitize({});
+    try { localStorage.removeItem(VIEW_KEY); } catch (e) { /* unavailable */ }
+    writeViewInputs();
+    speed = 1;
+    speedEl.value = '1';
+    if (data && exclude) {
+      exclude = defaultBox();
+      saveExclude();
+      writeBoxInputs();
+    }
+    invalidateColors();
+    applyPointStyle();
+    rebuildPath();
+    refreshMapColors();
+  });
+
+  bind('pcColorMode', 'change', (el) => { view.colorMode = el.value; invalidateColors(); refreshMapColors(); });
+  bind('pcSolid', 'input', (el) => { view.solidColor = el.value; invalidateColors(); refreshMapColors(); });
+  bind('pcSize', 'input', (el) => { view.pointSize = Number(el.value) || 1; applyPointStyle(); });
+  bind('pcShape', 'change', (el) => { view.pointShape = el.value; applyPointStyle(); });
+  bind('pcWindow', 'input', (el) => {
+    const v = Number(el.value);
+    const ok = el.value !== '' && Number.isFinite(v) && v >= 0;
+    el.classList.toggle('invalid', !ok);
+    if (ok) { view.windowSec = Math.min(120, v); shownKey = ''; }
+  });
+  bind('pcFade', 'change', (el) => { view.fade = el.checked; shownKey = ''; });
+  bind('pcMap', 'change', (el) => { view.showMap = el.checked; applyPointStyle(); });
+  bind('pcPath', 'change', (el) => { view.showPath = el.checked; applyPathStyle(); });
+  bind('pcPathColor', 'input', (el) => { view.pathColor = el.value; applyPathStyle(); });
+  bind('pcPathWidth', 'input', (el) => { view.pathWidth = Number(el.value) || 0.05; rebuildPath(); });
+  bind('pcChair', 'change', (el) => { view.showChair = el.checked; applyPathStyle(); });
+  bind('pcChairColor', 'input', (el) => { view.chairColor = el.value; if (engine) engine.chairMat.color.set(el.value); });
+
+  /* Exclusion box: edits apply as you type and are remembered per experiment. */
+  function onBoxEdited() {
+    if (!exclude) return;
+    const next = {};
+    let ok = true;
+    BOX_KEYS.forEach((k) => {
+      const el = $('pcBox_' + k);
+      const v = Number(el.value);
+      const good = el.value !== '' && Number.isFinite(v);
+      el.classList.toggle('invalid', !good);
+      if (!good) ok = false;
+      next[k] = v;
+    });
+    ['x', 'y', 'z'].forEach((a) => {
+      if (ok && next[a + 'min'] > next[a + 'max']) {
+        $('pcBox_' + a + 'min').classList.add('invalid');
+        $('pcBox_' + a + 'max').classList.add('invalid');
+        ok = false;
+      }
+    });
+    if (!ok) return;
+    Object.assign(exclude, next);
+    saveExclude();
+    refreshMapColors();
+  }
+  BOX_KEYS.forEach((k) => $('pcBox_' + k).addEventListener('input', onBoxEdited));
+  $('pcBoxOn').addEventListener('change', () => {
+    if (!exclude) return;
+    exclude.enabled = $('pcBoxOn').checked;
+    saveExclude();
+    refreshMapColors();
+  });
+  $('pcBoxShow').addEventListener('change', () => {
+    if (!exclude) return;
+    exclude.show = $('pcBoxShow').checked;
+    saveExclude();
+    updateBoxHelper();
+  });
+  $('pcBoxReset').addEventListener('click', () => {
+    if (!data) return;
+    const enabled = exclude ? exclude.enabled : false;
+    exclude = Object.assign(defaultBox(), { enabled });
+    saveExclude();
+    writeBoxInputs();
+    refreshMapColors();
+  });
+
+  // Exposed for testing the decoder outside the page.
+  window.__pcPlayerInternals = { decodeBag, buildMap, locatePoints, parseOdometry };
 })();
-</script>
-<script src="pointcloud_player.js"></script>
-</body>
-</html>

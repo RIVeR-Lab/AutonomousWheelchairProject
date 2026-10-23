@@ -1809,13 +1809,20 @@
     setStatus(projStat, 'ok', proj.folder ? trimSlash(proj.folder) + '/' : 'root');
     layout();
 
-    // Tell the point cloud player which run is selected and where its bag is.
+    // Tell the point cloud player which run is selected, and every run's bag location.
+    window.__experiment = lidarInfo(proj);
+    window.dispatchEvent(new CustomEvent('experiment-change', {
+      detail: Object.assign({ all: window.__experimentList || [] }, window.__experiment),
+    }));
+  }
+
+  /* Where a run's filtered LiDAR bag lives, for the point cloud player. */
+  function lidarInfo(proj) {
     const lidarDefault = (CFG.defaults.files && CFG.defaults.files.lidarBag) || DEFAULTS.defaults.files.lidarBag;
     const lidarProj = (proj.files && 'lidarBag' in proj.files)
       ? proj
       : Object.assign({}, proj, { files: Object.assign({}, proj.files, { lidarBag: lidarDefault }) });
-    window.__experiment = { id: proj.id, name: proj.name || proj.id, sources: sourcesFor(lidarProj, 'lidarBag') };
-    window.dispatchEvent(new CustomEvent('experiment-change', { detail: window.__experiment }));
+    return { id: proj.id, name: proj.name || proj.id, sources: sourcesFor(lidarProj, 'lidarBag') };
   }
 
   const rotSel = document.getElementById('rotSel');
@@ -1843,6 +1850,8 @@
       setStatus(projStat, 'bad', 'no projects in config');
       return;
     }
+
+    window.__experimentList = projects.map(lidarInfo);
 
     const wanted = new URLSearchParams(location.search).get('project') || CFG.defaultProject;
     const proj = projects.find(p => p.id === wanted) || projects[0];

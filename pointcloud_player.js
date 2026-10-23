@@ -65,18 +65,33 @@
   const previewEl = $('pcPreview');
 
   /* A still image of each experiment, shown while its bag downloads and decodes.
-     It lives next to the bag as preview.jpg, preview.png or preview.webp, tried in that order. */
-  const PREVIEW_NAMES = ['preview.jpg', 'preview.png', 'preview.webp'];
+     Looked for next to the bag first, then in the experiment folder itself:
+       <folder>/lidar_bag/preview.jpg|png|webp, then <folder>/preview.jpg|png|webp */
   function previewUrlsFor(exp) {
     const u = exp && exp.sources && exp.sources[0];
-    return u ? PREVIEW_NAMES.map((name) => u.replace(/[^/]*$/, name)) : [];
+    if (!u) return [];
+    const dir = u.replace(/[^/]*$/, '');
+    const parent = dir.replace(/[^/]+\/$/, '');
+    const out = [];
+    [dir, parent].forEach((d) => {
+      if (!d && d !== '') return;
+      ['preview.jpg', 'preview.png', 'preview.webp'].forEach((n) => {
+        if (out.indexOf(d + n) < 0) out.push(d + n);
+      });
+    });
+    return out;
   }
   function showPreview(exp) {
     hidePreview();
     const urls = previewUrlsFor(exp);
     let i = 0;
     const tryNext = () => {
-      if (i >= urls.length || currentId !== exp.id) { hidePreview(); return; }
+      if (currentId !== exp.id) { hidePreview(); return; }
+      if (i >= urls.length) {
+        hidePreview();
+        console.info('pointcloud_player.js: no preview image for ' + exp.id + '. Looked for: ' + urls.join(', '));
+        return;
+      }
       previewEl.src = urls[i++];
     };
     previewEl.onload = () => {

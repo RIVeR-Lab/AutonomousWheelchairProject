@@ -40,14 +40,3 @@ To use a different bag name, set `"lidarBag"` in that experiment's `files`.
 
 **File size:** keep files under 25 MB when uploading through the GitHub website, and don't store bags with
 Git LFS, since GitHub Pages serves only a pointer for LFS files.
-
-## Previewing locally
-
-The page loads its data with `fetch`, which browsers block for files opened directly from disk.
-Serve the folder instead:
-
-```bash
-python -m http.server 8000
-```
-
-Then open <http://localhost:8000>.

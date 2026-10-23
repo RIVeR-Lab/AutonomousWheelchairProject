@@ -81,7 +81,7 @@
       fade: v.fade !== false,
       showMap: v.showMap !== false,
       showPath: v.showPath !== false,
-      pathColor: hex(v.pathColor, '#ffff33'),
+      pathColor: hex(v.pathColor, '#ff0000'),
       pathWidth: num(v.pathWidth, 0.01, 0.5, 0.1),
       showChair: v.showChair !== false,
       chairColor: hex(v.chairColor, '#7fffd4'),
@@ -870,12 +870,92 @@
   }
 
   /* ------------------------------------------------------------ experiment selection */
-  let experiment = window.__experiment || null;
+  /* The selector lists only experiments whose bag is actually there. Each run's bag is
+     checked with a HEAD request (no download) when the section first comes into view. */
+  let allExps = window.__experimentList || [];
+  let wantedId = window.__experiment ? window.__experiment.id : null;   // the page's selected run
+  let available = null;        // runs with a bag, each with the one URL that answered
+  let checking = null;
+  let currentId = null;        // the run shown in the viewer
+  let loadingId = null;        // the run being downloaded or decoded
   let activated = false;
   let loadToken = 0;
   const cache = new Map();     // experiment id -> decoded data (last few)
 
+  function checkAvailability() {
+    if (checking) return checking;
+    const list = allExps;
+    checking = Promise.all(list.map(async (exp) => {
+      for (const url of exp.sources || []) {
+        try {
+          const r = await fetch(url, { method: 'HEAD' });
+          if (r.ok) return Object.assign({}, exp, { sources: [url] });
+        } catch (e) { /* try the next location */ }
+      }
+      return null;
+    })).then((res) => {
+      if (list === allExps) available = res.filter(Boolean);
+      return available;
+    });
+    return checking;
+  }
+
+  function fillSelector() {
+    if (!available) {
+      expSel.innerHTML = '<option>Checking for LiDAR recordings…</option>';
+      expSel.disabled = true;
+      return;
+    }
+    if (!available.length) {
+      expSel.innerHTML = '<option>No LiDAR recordings available</option>';
+      expSel.disabled = true;
+      return;
+    }
+    expSel.innerHTML = '';
+    available.forEach((exp) => {
+      const o = document.createElement('option');
+      o.value = exp.id;
+      o.textContent = exp.name;
+      expSel.appendChild(o);
+    });
+    expSel.disabled = available.length < 2;
+    if (currentId) expSel.value = currentId;
+  }
+
+  async function refresh() {
+    fillSelector();
+    if (!available) showOverlay('Checking which experiments have LiDAR recordings…');
+    await checkAvailability();
+    fillSelector();
+    if (!available || !available.length) {
+      clearData('None of the experiments has a LiDAR recording yet.');
+      return;
+    }
+    // Follow the page's selected run when it has a recording; otherwise keep the one
+    // already shown, or start with the first run that has one.
+    const target = available.find((e) => e.id === wantedId)
+      || available.find((e) => e.id === currentId)
+      || available[0];
+    show(target);
+  }
+
+  function show(exp) {
+    // already showing it, or still loading it
+    if (exp.id === currentId && (loadingId === exp.id || (data && cache.get(exp.id) === data))) {
+      expSel.value = exp.id;
+      return;
+    }
+    currentId = exp.id;
+    expSel.value = exp.id;
+    loadExperiment(exp);
+  }
+
   async function loadExperiment(exp) {
+    loadingId = exp ? exp.id : null;
+    try { await loadExperimentInner(exp); } finally { if (loadingId === (exp && exp.id)) loadingId = null; }
+  }
+
+  async function loadExperimentInner(exp) {
     const token = ++loadToken;
     const stale = () => token !== loadToken;
     if (!exp) { clearData('Choose an experiment above.'); return; }
@@ -901,7 +981,7 @@
                     total ? got / total : undefined);
       }, stale);
       if (stale()) return;
-      if (!bytes) { clearData('No LiDAR recording found for this experiment.'); setStatus('wait', ''); return; }
+      if (!bytes) { clearData('Couldn’t download the LiDAR recording for this experiment.'); setStatus('bad', 'error'); return; }
       checkSqlite(bytes);
 
       showOverlay('Preparing the decoder…');
@@ -927,32 +1007,38 @@
     }
   }
 
-  function syncSelector() {
-    const main = $('projectSel');
-    if (!main) return;
-    expSel.innerHTML = main.innerHTML;
-    expSel.value = main.value;
-    expSel.disabled = main.disabled;
-  }
+  const sameList = (a, b) => a.length === b.length &&
+    a.every((e, i) => e.id === b[i].id && JSON.stringify(e.sources) === JSON.stringify(b[i].sources));
 
   window.addEventListener('experiment-change', (e) => {
-    experiment = e.detail;
-    syncSelector();
-    if (activated) loadExperiment(experiment);
+    const d = e.detail || {};
+    wantedId = d.id;
+    if (Array.isArray(d.all) && !sameList(d.all, allExps)) {
+      allExps = d.all;                 // a different config was loaded: check again
+      checking = null;
+      available = null;
+    }
+    if (!activated) return;
+    if (!available) { refresh(); return; }
+    const exp = available.find((x) => x.id === d.id);
+    if (exp) show(exp);                // runs without a recording leave the viewer as it is
   });
 
   expSel.addEventListener('change', () => {
-    const main = $('projectSel');
-    if (!main || main.value === expSel.value) return;
-    main.value = expSel.value;
-    main.dispatchEvent(new Event('change'));     // loads the run everywhere on the page
+    const exp = available && available.find((x) => x.id === expSel.value);
+    if (!exp) return;
+    show(exp);
+    const main = $('projectSel');      // switch the rest of the page to the same run
+    if (main && main.value !== exp.id && Array.from(main.options || []).some((o) => o.value === exp.id)) {
+      main.value = exp.id;
+      main.dispatchEvent(new Event('change'));
+    }
   });
 
   function activate() {
     if (activated) return;
     activated = true;
-    syncSelector();
-    loadExperiment(experiment);
+    refresh();
   }
 
   let visible = false;
